@@ -5,6 +5,8 @@ import type { AppViewState } from "./app-view-state.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import type { IssueStatus } from "./controllers/issues.ts";
+import type { IssuesListResult } from "./controllers/issues.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
@@ -30,7 +32,7 @@ import type {
   NostrProfile,
 } from "./types.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
-import type { MetricsData } from "./views/metrics.ts";
+import type { DayDetailData, MetricsData, ModelDetailData } from "./views/metrics.ts";
 import {
   handleChannelConfigReload as handleChannelConfigReloadInternal,
   handleChannelConfigSave as handleChannelConfigSaveInternal,
@@ -79,6 +81,12 @@ import {
 } from "./app-tool-stream.ts";
 import { resolveInjectedAssistantIdentity } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
+import {
+  loadIssues as loadIssuesInternal,
+  resolveIssue as resolveIssueInternal,
+  dismissIssue as dismissIssueInternal,
+  reopenIssue as reopenIssueInternal,
+} from "./controllers/issues.ts";
 import {
   loadTaskQueue as loadTaskQueueInternal,
   loadCardDetail as loadCardDetailInternal,
@@ -254,6 +262,18 @@ export class OpenClawApp extends LitElement {
   @state() metricsLoading = false;
   @state() metricsData: MetricsData | null = null;
   @state() metricsError: string | null = null;
+  @state() metricsDays: number | null = 14;
+  @state() metricsSelectedModel: string | null = null;
+  @state() metricsModelDetail: ModelDetailData | null = null;
+  @state() metricsModelDetailLoading = false;
+  @state() metricsSelectedDay: string | null = null;
+  @state() metricsDayDetail: DayDetailData | null = null;
+  @state() metricsDayDetailLoading = false;
+  @state() issuesLoading = false;
+  @state() issuesData: IssuesListResult | null = null;
+  @state() issuesError: string | null = null;
+  @state() issuesFilter: IssueStatus | "all" = "open";
+  @state() issuesBusy = false;
 
   @state() skillsLoading = false;
   @state() skillsReport: SkillStatusReport | null = null;
@@ -449,13 +469,96 @@ export class OpenClawApp extends LitElement {
     this.metricsLoading = true;
     this.metricsError = null;
     try {
-      const res = await this.client.request<MetricsData>("metrics.overview", {});
+      const params: Record<string, unknown> = {};
+      if (this.metricsDays) params.days = this.metricsDays;
+      const res = await this.client.request<MetricsData>("metrics.overview", params);
       this.metricsData = res;
     } catch (err) {
       this.metricsError = String(err);
     } finally {
       this.metricsLoading = false;
     }
+  }
+
+  setMetricsDays(days: number | null) {
+    this.metricsDays = days;
+    this.metricsSelectedModel = null;
+    this.metricsModelDetail = null;
+    this.metricsSelectedDay = null;
+    this.metricsDayDetail = null;
+    void this.loadMetrics();
+  }
+
+  async selectMetricsModel(model: string) {
+    if (this.metricsSelectedModel === model) {
+      this.metricsSelectedModel = null;
+      this.metricsModelDetail = null;
+      return;
+    }
+    this.metricsSelectedModel = model;
+    this.metricsSelectedDay = null;
+    this.metricsDayDetail = null;
+    this.metricsModelDetailLoading = true;
+    this.metricsModelDetail = null;
+    try {
+      const params: Record<string, unknown> = { model };
+      if (this.metricsDays) params.days = this.metricsDays;
+      const res = await this.client!.request<ModelDetailData>("metrics.modelDetail", params);
+      this.metricsModelDetail = res;
+    } catch (err) {
+      this.metricsError = `Model detail: ${String(err)}`;
+    } finally {
+      this.metricsModelDetailLoading = false;
+    }
+  }
+
+  async selectMetricsDay(day: string) {
+    if (this.metricsSelectedDay === day) {
+      this.metricsSelectedDay = null;
+      this.metricsDayDetail = null;
+      return;
+    }
+    this.metricsSelectedDay = day;
+    this.metricsSelectedModel = null;
+    this.metricsModelDetail = null;
+    this.metricsDayDetailLoading = true;
+    this.metricsDayDetail = null;
+    try {
+      const res = await this.client!.request<DayDetailData>("metrics.dayDetail", { day });
+      this.metricsDayDetail = res;
+    } catch (err) {
+      this.metricsError = `Day detail: ${String(err)}`;
+    } finally {
+      this.metricsDayDetailLoading = false;
+    }
+  }
+
+  closeMetricsDetail() {
+    this.metricsSelectedModel = null;
+    this.metricsModelDetail = null;
+    this.metricsSelectedDay = null;
+    this.metricsDayDetail = null;
+  }
+
+  async loadIssues() {
+    await loadIssuesInternal(this as unknown as Parameters<typeof loadIssuesInternal>[0]);
+  }
+
+  setIssuesFilter(filter: IssueStatus | "all") {
+    this.issuesFilter = filter;
+    void this.loadIssues();
+  }
+
+  async resolveIssue(id: string) {
+    await resolveIssueInternal(this as unknown as Parameters<typeof resolveIssueInternal>[0], id);
+  }
+
+  async dismissIssue(id: string) {
+    await dismissIssueInternal(this as unknown as Parameters<typeof dismissIssueInternal>[0], id);
+  }
+
+  async reopenIssue(id: string) {
+    await reopenIssueInternal(this as unknown as Parameters<typeof reopenIssueInternal>[0], id);
   }
 
   async handleAbortChat() {

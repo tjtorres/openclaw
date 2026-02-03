@@ -91,6 +91,14 @@ const BASE_METHODS = [
   "taskQueue.markSeen",
   // Metrics
   "metrics.overview",
+  "metrics.modelDetail",
+  "metrics.dayDetail",
+  // Issues
+  "issues.list",
+  "issues.create",
+  "issues.resolve",
+  "issues.dismiss",
+  "issues.reopen",
   // WebChat WebSocket-native chat methods
   "chat.history",
   "chat.abort",

@@ -63,6 +63,7 @@ import { renderDebug } from "./views/debug.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderInstances } from "./views/instances.ts";
+import { renderIssues } from "./views/issues.ts";
 import { renderLogs } from "./views/logs.ts";
 import { renderMetrics } from "./views/metrics.ts";
 import { renderNodes } from "./views/nodes.ts";
@@ -364,7 +365,45 @@ export function renderApp(state: AppViewState) {
                 loading: state.metricsLoading,
                 data: state.metricsData,
                 error: state.metricsError,
+                days: state.metricsDays,
+                modelDetail: state.metricsModelDetail,
+                modelDetailLoading: state.metricsModelDetailLoading,
+                dayDetail: state.metricsDayDetail,
+                dayDetailLoading: state.metricsDayDetailLoading,
+                selectedModel: state.metricsSelectedModel,
+                selectedDay: state.metricsSelectedDay,
                 onRefresh: () => state.loadMetrics(),
+                onDaysChange: (days) => state.setMetricsDays(days),
+                onSelectModel: (model) => state.selectMetricsModel(model),
+                onSelectDay: (day) => state.selectMetricsDay(day),
+                onCloseDetail: () => state.closeMetricsDetail(),
+                onNavigateSession: (sessionKey) => {
+                  state.sessionKey = sessionKey;
+                  state.applySettings({
+                    ...state.settings,
+                    sessionKey,
+                    lastActiveSessionKey: sessionKey,
+                  });
+                  state.setTab("sessions");
+                },
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "issues"
+            ? renderIssues({
+                loading: state.issuesLoading,
+                issues: state.issuesData?.issues ?? null,
+                counts: state.issuesData?.counts ?? null,
+                error: state.issuesError,
+                filter: state.issuesFilter,
+                busy: state.issuesBusy,
+                onRefresh: () => state.loadIssues(),
+                onFilterChange: (filter) => state.setIssuesFilter(filter),
+                onResolve: (id) => state.resolveIssue(id),
+                onDismiss: (id) => state.dismissIssue(id),
+                onReopen: (id) => state.reopenIssue(id),
               })
             : nothing
         }

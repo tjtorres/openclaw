@@ -2,6 +2,7 @@ import type { EventLogEntry } from "./app-events.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import type { Issue, IssuesCounts, IssueStatus } from "./controllers/issues.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
@@ -29,7 +30,7 @@ import type {
 } from "./types.ts";
 import type { ChatAttachment, ChatQueueItem, CronFormState } from "./ui-types.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
-import type { MetricsData } from "./views/metrics.ts";
+import type { DayDetailData, MetricsData, ModelDetailData } from "./views/metrics.ts";
 
 export type AppViewState = {
   settings: UiSettings;
@@ -156,7 +157,28 @@ export type AppViewState = {
   metricsLoading: boolean;
   metricsData: MetricsData | null;
   metricsError: string | null;
+  metricsDays: number | null;
+  metricsSelectedModel: string | null;
+  metricsModelDetail: ModelDetailData | null;
+  metricsModelDetailLoading: boolean;
+  metricsSelectedDay: string | null;
+  metricsDayDetail: DayDetailData | null;
+  metricsDayDetailLoading: boolean;
   loadMetrics: () => void;
+  setMetricsDays: (days: number | null) => void;
+  selectMetricsModel: (model: string) => void;
+  selectMetricsDay: (day: string) => void;
+  closeMetricsDetail: () => void;
+  issuesLoading: boolean;
+  issuesData: { issues: Issue[]; counts: IssuesCounts; fetchedAt: number } | null;
+  issuesError: string | null;
+  issuesFilter: IssueStatus | "all";
+  issuesBusy: boolean;
+  loadIssues: () => void;
+  setIssuesFilter: (filter: IssueStatus | "all") => void;
+  resolveIssue: (id: string) => void;
+  dismissIssue: (id: string) => void;
+  reopenIssue: (id: string) => void;
   skillsLoading: boolean;
   skillsReport: SkillStatusReport | null;
   skillsError: string | null;

@@ -28,13 +28,22 @@ function queryOne(db: SqliteDatabase, sql: string): Record<string, unknown> {
   return (rows[0] as Record<string, unknown>) ?? {};
 }
 
+function daysClause(days: number | null): string {
+  if (!days) return "";
+  return `AND date(ts) >= date('now', '-${days} days')`;
+}
+
 export const metricsHandlers: GatewayRequestHandlers = {
-  "metrics.overview": ({ respond }) => {
+  "metrics.overview": ({ params, respond }) => {
     const db = getDb();
     if (!db) {
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, "Usage DB not found"));
       return;
     }
+
+    const { days } = (params ?? {}) as { days?: number };
+    const rangeDays = days ?? 14;
+    const dailyDays = Math.min(rangeDays || 30, 90);
 
     try {
       const todayRow = queryOne(
@@ -57,12 +66,13 @@ export const metricsHandlers: GatewayRequestHandlers = {
           GROUP BY date(ts))`,
       );
 
+      const rangeFilter = days ? `WHERE date(ts) >= date('now', '-${days} days')` : "";
       const totalRow = queryOne(
         db,
         `SELECT COALESCE(SUM(cost_total), 0) as cost, COUNT(*) as events,
           SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens,
           SUM(cache_read) as cache_tokens
-         FROM usage_events`,
+         FROM usage_events ${rangeFilter}`,
       );
 
       const byModel = query(
@@ -70,7 +80,8 @@ export const metricsHandlers: GatewayRequestHandlers = {
         `SELECT model, COUNT(*) as events, ROUND(SUM(cost_total), 4) as cost,
           SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens,
           SUM(cache_read) as cache_tokens
-         FROM usage_events WHERE model NOT IN ('unknown', 'delivery-mirror')
+         FROM usage_events
+         WHERE model NOT IN ('unknown', 'delivery-mirror') ${daysClause(days ?? null)}
          GROUP BY model ORDER BY cost DESC`,
       );
 
@@ -86,7 +97,7 @@ export const metricsHandlers: GatewayRequestHandlers = {
         db,
         `SELECT date(ts) as day, ROUND(SUM(cost_total), 4) as cost, COUNT(*) as events
          FROM usage_events
-         WHERE date(ts) >= date('now', '-14 days')
+         WHERE date(ts) >= date('now', '-${dailyDays} days')
          GROUP BY date(ts) ORDER BY date(ts)`,
       );
 
@@ -118,6 +129,7 @@ export const metricsHandlers: GatewayRequestHandlers = {
         hourly,
         daily,
         topSessions,
+        days: days ?? null,
         fetchedAt: Date.now(),
       });
     } catch (err) {
@@ -128,6 +140,147 @@ export const metricsHandlers: GatewayRequestHandlers = {
         false,
         undefined,
         errorShape(ErrorCodes.INTERNAL_ERROR, `Metrics query failed: ${String(err)}`),
+      );
+    }
+  },
+
+  "metrics.modelDetail": ({ params, respond }) => {
+    const db = getDb();
+    if (!db) {
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, "Usage DB not found"));
+      return;
+    }
+    const { model, days } = params as { model?: string; days?: number };
+    if (!model) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "model required"));
+      return;
+    }
+
+    try {
+      const rangeFilter = days ? `AND date(ts) >= date('now', '-${days} days')` : "";
+
+      const summary = queryOne(
+        db,
+        `SELECT COUNT(*) as events, ROUND(SUM(cost_total), 4) as cost,
+          SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens,
+          SUM(cache_read) as cache_tokens,
+          ROUND(AVG(cost_total), 6) as avg_cost_per_event
+         FROM usage_events WHERE model = '${model.replace(/'/g, "''")}' ${rangeFilter}`,
+      );
+
+      const daily = query(
+        db,
+        `SELECT date(ts) as day, ROUND(SUM(cost_total), 4) as cost, COUNT(*) as events
+         FROM usage_events WHERE model = '${model.replace(/'/g, "''")}'
+         AND date(ts) >= date('now', '-${days ?? 14} days')
+         GROUP BY date(ts) ORDER BY date(ts)`,
+      );
+
+      const bySessions = query(
+        db,
+        `SELECT session_key, COUNT(*) as events, ROUND(SUM(cost_total), 4) as cost
+         FROM usage_events WHERE model = '${model.replace(/'/g, "''")}'
+         AND session_key IS NOT NULL ${rangeFilter}
+         GROUP BY session_key ORDER BY cost DESC LIMIT 10`,
+      );
+
+      const hourly = query(
+        db,
+        `SELECT hour_pt as hour, ROUND(SUM(cost_total), 4) as cost, COUNT(*) as events
+         FROM usage_events WHERE model = '${model.replace(/'/g, "''")}'
+         AND ts >= datetime('now', '-48 hours')
+         GROUP BY hour_pt ORDER BY hour_pt`,
+      );
+
+      db.close();
+
+      respond(true, {
+        model,
+        summary,
+        daily,
+        hourly,
+        bySessions,
+        fetchedAt: Date.now(),
+      });
+    } catch (err) {
+      try {
+        db.close();
+      } catch {}
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INTERNAL_ERROR, `Model detail query failed: ${String(err)}`),
+      );
+    }
+  },
+
+  "metrics.dayDetail": ({ params, respond }) => {
+    const db = getDb();
+    if (!db) {
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, "Usage DB not found"));
+      return;
+    }
+    const { day } = params as { day?: string };
+    if (!day) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "day required (YYYY-MM-DD)"),
+      );
+      return;
+    }
+
+    try {
+      const summary = queryOne(
+        db,
+        `SELECT COUNT(*) as events, ROUND(SUM(cost_total), 4) as cost,
+          SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens,
+          SUM(cache_read) as cache_tokens
+         FROM usage_events WHERE date(ts) = '${day.replace(/'/g, "''")}'`,
+      );
+
+      const byModel = query(
+        db,
+        `SELECT model, COUNT(*) as events, ROUND(SUM(cost_total), 4) as cost,
+          SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens
+         FROM usage_events WHERE date(ts) = '${day.replace(/'/g, "''")}'
+         AND model NOT IN ('unknown', 'delivery-mirror')
+         GROUP BY model ORDER BY cost DESC`,
+      );
+
+      const byHour = query(
+        db,
+        `SELECT hour_pt as hour, ROUND(SUM(cost_total), 4) as cost, COUNT(*) as events
+         FROM usage_events WHERE date(ts) = '${day.replace(/'/g, "''")}'
+         GROUP BY hour_pt ORDER BY hour_pt`,
+      );
+
+      const bySessions = query(
+        db,
+        `SELECT session_key, COUNT(*) as events, ROUND(SUM(cost_total), 4) as cost
+         FROM usage_events WHERE date(ts) = '${day.replace(/'/g, "''")}'
+         AND session_key IS NOT NULL
+         GROUP BY session_key ORDER BY cost DESC LIMIT 10`,
+      );
+
+      db.close();
+
+      respond(true, {
+        day,
+        summary,
+        byModel,
+        byHour,
+        bySessions,
+        fetchedAt: Date.now(),
+      });
+    } catch (err) {
+      try {
+        db.close();
+      } catch {}
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INTERNAL_ERROR, `Day detail query failed: ${String(err)}`),
       );
     }
   },

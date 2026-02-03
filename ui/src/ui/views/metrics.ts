@@ -28,14 +28,49 @@ export type MetricsData = {
     first_event: string;
     last_event: string;
   }>;
+  days: number | null;
   fetchedAt: number;
+};
+
+export type ModelDetailData = {
+  model: string;
+  summary: Record<string, unknown>;
+  daily: Array<{ day: string; cost: number; events: number }>;
+  hourly: Array<{ hour: string; cost: number; events: number }>;
+  bySessions: Array<{ session_key: string; events: number; cost: number }>;
+};
+
+export type DayDetailData = {
+  day: string;
+  summary: Record<string, unknown>;
+  byModel: Array<{
+    model: string;
+    cost: number;
+    events: number;
+    input_tokens: number;
+    output_tokens: number;
+  }>;
+  byHour: Array<{ hour: string; cost: number; events: number }>;
+  bySessions: Array<{ session_key: string; events: number; cost: number }>;
 };
 
 export type MetricsProps = {
   loading: boolean;
   data: MetricsData | null;
   error: string | null;
+  days: number | null;
+  modelDetail: ModelDetailData | null;
+  modelDetailLoading: boolean;
+  dayDetail: DayDetailData | null;
+  dayDetailLoading: boolean;
+  selectedModel: string | null;
+  selectedDay: string | null;
   onRefresh: () => void;
+  onDaysChange: (days: number | null) => void;
+  onSelectModel: (model: string) => void;
+  onSelectDay: (day: string) => void;
+  onCloseDetail: () => void;
+  onNavigateSession: (sessionKey: string) => void;
 };
 
 function formatCost(n: number): string {
@@ -55,13 +90,6 @@ function costColor(cost: number, avg: number): string {
   return "#238636";
 }
 
-function renderBar(value: number, max: number, color: string, height = 24) {
-  const pct = max > 0 ? Math.max(2, (value / max) * 100) : 0;
-  return html`<div
-    style="width:${pct}%;height:${height}px;background:${color};border-radius:3px;transition:width 0.3s"
-  ></div>`;
-}
-
 function renderSparkline(data: Array<{ cost: number }>, width = 200, height = 40) {
   if (data.length < 2) return nothing;
   const max = Math.max(...data.map((d) => d.cost), 0.01);
@@ -78,15 +106,25 @@ function renderSparkline(data: Array<{ cost: number }>, width = 200, height = 40
   `;
 }
 
-function renderModelTable(models: MetricsData["byModel"], totalCost: number) {
+function renderModelTable(
+  models: MetricsData["byModel"],
+  totalCost: number,
+  onSelect: (model: string) => void,
+  selectedModel: string | null,
+) {
   const maxCost = Math.max(...models.map((m) => m.cost), 0.01);
   return html`
     <div class="m-table">
       ${models.map(
         (m) => html`
-          <div class="m-model-row">
+          <div class="m-model-row ${selectedModel === m.model ? "m-model-selected" : ""}"
+            @click=${() => onSelect(m.model)}
+            title="Click for details"
+          >
             <div class="m-model-name">${m.model}</div>
-            <div class="m-model-bar">${renderBar(m.cost, maxCost, "#1f6feb", 16)}</div>
+            <div class="m-model-bar">
+              <div style="width:${Math.max(2, (m.cost / maxCost) * 100)}%;height:16px;background:#1f6feb;border-radius:3px;transition:width 0.3s"></div>
+            </div>
             <div class="m-model-cost">${formatCost(m.cost)}</div>
             <div class="m-model-pct">${totalCost > 0 ? Math.round((m.cost / totalCost) * 100) : 0}%</div>
             <div class="m-model-events">${m.events.toLocaleString()} calls</div>
@@ -97,21 +135,135 @@ function renderModelTable(models: MetricsData["byModel"], totalCost: number) {
   `;
 }
 
-function renderDailyChart(daily: MetricsData["daily"], weekAvg: number) {
+function renderDailyChart(
+  daily: MetricsData["daily"],
+  weekAvg: number,
+  onSelect: (day: string) => void,
+  selectedDay: string | null,
+) {
   const maxCost = Math.max(...daily.map((d) => d.cost), 0.01);
   return html`
     <div class="m-daily-chart">
       ${daily.map((d) => {
         const pct = (d.cost / maxCost) * 100;
         const color = costColor(d.cost, weekAvg);
-        const label = d.day.slice(5); // MM-DD
+        const label = d.day.slice(5);
+        const isSelected = selectedDay === d.day;
         return html`
-          <div class="m-daily-bar-wrap" title="${d.day}: ${formatCost(d.cost)} (${d.events} events)">
+          <div class="m-daily-bar-wrap ${isSelected ? "m-daily-selected" : ""}"
+            @click=${() => onSelect(d.day)}
+          >
+            <div class="m-daily-tooltip">${formatCost(d.cost)}<br/>${d.events} events</div>
             <div class="m-daily-bar" style="height:${Math.max(2, pct)}%;background:${color}"></div>
             <div class="m-daily-label">${label}</div>
           </div>
         `;
       })}
+    </div>
+  `;
+}
+
+function renderModelDetail(detail: ModelDetailData, loading: boolean) {
+  if (loading)
+    return html`
+      <div class="muted" style="padding: 12px">Loading model detail…</div>
+    `;
+  const s = detail.summary as Record<string, number>;
+  const maxDaily = Math.max(...detail.daily.map((d) => d.cost), 0.01);
+  return html`
+    <div class="m-detail-section">
+      <div class="m-detail-header">
+        <span class="m-detail-model">${detail.model}</span>
+        <span class="m-detail-stat">${formatCost(s.cost ?? 0)} total</span>
+        <span class="m-detail-stat">${(s.events ?? 0).toLocaleString()} events</span>
+        <span class="m-detail-stat">${formatCost(s.avg_cost_per_event ?? 0)}/call avg</span>
+      </div>
+      <div class="m-detail-label">Daily trend</div>
+      <div class="m-detail-mini-chart">
+        ${detail.daily.map(
+          (d) => html`
+          <div class="m-mini-bar-wrap" title="${d.day}: ${formatCost(d.cost)}">
+            <div class="m-mini-bar" style="height:${Math.max(2, (d.cost / maxDaily) * 100)}%"></div>
+            <div class="m-mini-label">${d.day.slice(8)}</div>
+          </div>
+        `,
+        )}
+      </div>
+      ${
+        detail.bySessions.length > 0
+          ? html`
+        <div class="m-detail-label" style="margin-top:12px">Top sessions</div>
+        ${detail.bySessions.map(
+          (s) => html`
+          <div class="m-detail-session-row">
+            <span class="m-detail-session-key">${s.session_key}</span>
+            <span style="font-weight:600">${formatCost(s.cost)}</span>
+            <span style="opacity:0.4;font-size:11px">${s.events} calls</span>
+          </div>
+        `,
+        )}
+      `
+          : nothing
+      }
+      ${renderSparkline(detail.hourly, 400, 40)}
+    </div>
+  `;
+}
+
+function renderDayDetail(
+  detail: DayDetailData,
+  loading: boolean,
+  onNavigateSession: (key: string) => void,
+) {
+  if (loading)
+    return html`
+      <div class="muted" style="padding: 12px">Loading day detail…</div>
+    `;
+  const s = detail.summary as Record<string, number>;
+  const maxModel = Math.max(...detail.byModel.map((m) => m.cost), 0.01);
+  return html`
+    <div class="m-detail-section">
+      <div class="m-detail-header">
+        <span class="m-detail-model">${detail.day}</span>
+        <span class="m-detail-stat">${formatCost(s.cost ?? 0)} total</span>
+        <span class="m-detail-stat">${(s.events ?? 0).toLocaleString()} events</span>
+        <span class="m-detail-stat">${formatTokens(Number(s.input_tokens ?? 0))} in / ${formatTokens(Number(s.output_tokens ?? 0))} out</span>
+      </div>
+      <div class="m-detail-label">By model</div>
+      <div class="m-table" style="margin-bottom:12px">
+        ${detail.byModel.map(
+          (m) => html`
+          <div class="m-model-row" style="cursor:default">
+            <div class="m-model-name">${m.model}</div>
+            <div class="m-model-bar">
+              <div style="width:${Math.max(2, (m.cost / maxModel) * 100)}%;height:14px;background:#1f6feb;border-radius:3px"></div>
+            </div>
+            <div class="m-model-cost">${formatCost(m.cost)}</div>
+            <div class="m-model-pct">${s.cost ? Math.round((m.cost / s.cost) * 100) : 0}%</div>
+            <div class="m-model-events">${m.events} calls</div>
+          </div>
+        `,
+        )}
+      </div>
+      ${
+        detail.bySessions.length > 0
+          ? html`
+        <div class="m-detail-label">Top sessions</div>
+        ${detail.bySessions.map(
+          (sess) => html`
+          <div class="m-detail-session-row" @click=${() => onNavigateSession(sess.session_key)}
+            title="Click to open session" style="cursor:pointer">
+            <span class="m-detail-session-key">${sess.session_key}</span>
+            <span style="font-weight:600">${formatCost(sess.cost)}</span>
+            <span style="opacity:0.4;font-size:11px">${sess.events} calls</span>
+          </div>
+        `,
+        )}
+      `
+          : nothing
+      }
+      <div class="m-detail-label" style="margin-top:12px">Hourly</div>
+      ${renderSparkline(detail.byHour, 400, 40)}
     </div>
   `;
 }
@@ -145,6 +297,16 @@ export function renderMetrics(props: MetricsProps) {
     d.weekAvg.cost > 0 ? ((d.today.cost / d.weekAvg.cost - 1) * 100).toFixed(0) : "0";
   const todayDir = Number(todayVsAvg) > 0 ? "↑" : Number(todayVsAvg) < 0 ? "↓" : "→";
 
+  const daysPills: Array<{ value: number | null; label: string }> = [
+    { value: 7, label: "7d" },
+    { value: 14, label: "14d" },
+    { value: 30, label: "30d" },
+    { value: null, label: "All" },
+  ];
+
+  // Is there a detail panel open?
+  const hasDetail = props.selectedModel || props.selectedDay;
+
   return html`
     <style>
       .m-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
@@ -157,40 +319,138 @@ export function renderMetrics(props: MetricsProps) {
       .m-stat-sub { font-size: 12px; margin-top: 4px; }
 
       .m-section { margin-top: 20px; }
+      .m-section-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 12px;
+      }
       .m-section-title {
         font-size: 13px; font-weight: 600; opacity: 0.6;
-        text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;
+        text-transform: uppercase; letter-spacing: 0.5px;
       }
 
+      /* Date range pills */
+      .m-pills { display: flex; gap: 4px; }
+      .m-pill {
+        padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 500;
+        border: 1px solid var(--border); background: var(--panel); color: var(--text);
+        cursor: pointer; transition: all 0.15s;
+      }
+      .m-pill:hover { border-color: var(--border-strong); }
+      .m-pill.active {
+        background: var(--bg-accent, rgba(31,111,235,0.12));
+        border-color: var(--accent, #1f6feb);
+        color: var(--accent, #1f6feb);
+      }
+
+      /* Model table */
       .m-model-row {
         display: grid; grid-template-columns: 160px 1fr 70px 40px 90px;
         align-items: center; gap: 8px; padding: 6px 0;
         border-bottom: 1px solid var(--border);
-        font-size: 13px;
+        font-size: 13px; cursor: pointer; transition: background 0.1s;
       }
+      .m-model-row:hover { background: var(--bg-hover, rgba(255,255,255,0.03)); }
+      .m-model-selected { background: var(--bg-accent, rgba(31,111,235,0.08)) !important; }
       .m-model-name { font-weight: 500; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
       .m-model-cost { text-align: right; font-weight: 600; }
       .m-model-pct { text-align: right; opacity: 0.5; font-size: 12px; }
       .m-model-events { text-align: right; opacity: 0.4; font-size: 11px; }
 
+      /* Daily chart with tooltips */
       .m-daily-chart {
         display: flex; align-items: flex-end; gap: 4px; height: 120px;
         padding: 0 4px; border-bottom: 1px solid var(--border);
       }
-      .m-daily-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; cursor: default; }
-      .m-daily-bar { width: 100%; max-width: 40px; border-radius: 3px 3px 0 0; transition: height 0.3s; min-height: 2px; }
+      .m-daily-bar-wrap {
+        flex: 1; display: flex; flex-direction: column; align-items: center;
+        height: 100%; justify-content: flex-end; cursor: pointer; position: relative;
+      }
+      .m-daily-bar-wrap:hover .m-daily-tooltip { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+      .m-daily-bar-wrap:hover .m-daily-bar { filter: brightness(1.2); }
+      .m-daily-selected .m-daily-bar {
+        box-shadow: 0 0 0 2px var(--accent, #1f6feb);
+      }
+      .m-daily-tooltip {
+        position: absolute; top: -8px; left: 50%;
+        transform: translateX(-50%); opacity: 0;
+        background: var(--panel); border: 1px solid var(--border-strong);
+        border-radius: 6px; padding: 4px 8px;
+        font-size: 11px; white-space: nowrap; z-index: 10;
+        pointer-events: none; transition: all 0.15s;
+        text-align: center; line-height: 1.3;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      }
+      .m-daily-bar { width: 100%; max-width: 40px; border-radius: 3px 3px 0 0; transition: all 0.3s; min-height: 2px; }
       .m-daily-label { font-size: 10px; opacity: 0.4; margin-top: 4px; }
 
+      /* Session rows */
       .m-session-row {
         display: grid; grid-template-columns: 1fr 70px 60px;
         align-items: center; gap: 8px; padding: 6px 0;
         border-bottom: 1px solid var(--border); font-size: 13px;
+        cursor: pointer; transition: background 0.1s;
       }
+      .m-session-row:hover { background: var(--bg-hover, rgba(255,255,255,0.03)); }
       .m-session-key { font-size: 12px; overflow: hidden; text-overflow: ellipsis; opacity: 0.8; }
 
       .m-refresh-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
       .m-sparkline-wrap { display: flex; align-items: center; gap: 12px; }
+
+      /* Detail panel */
+      .m-detail-overlay {
+        margin-top: 16px; padding: 16px;
+        background: var(--panel); border: 1px solid var(--border);
+        border-radius: 10px; position: relative;
+      }
+      .m-detail-close {
+        position: absolute; top: 8px; right: 8px;
+        background: none; border: none; cursor: pointer;
+        font-size: 18px; opacity: 0.5; color: var(--text);
+        padding: 4px 8px; border-radius: 4px;
+      }
+      .m-detail-close:hover { opacity: 1; background: var(--bg-hover); }
+      .m-detail-section { }
+      .m-detail-header {
+        display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .m-detail-model { font-size: 16px; font-weight: 700; }
+      .m-detail-stat { font-size: 13px; opacity: 0.6; }
+      .m-detail-label {
+        font-size: 11px; font-weight: 600; opacity: 0.4;
+        text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+      }
+      .m-detail-mini-chart {
+        display: flex; align-items: flex-end; gap: 3px; height: 60px;
+      }
+      .m-mini-bar-wrap {
+        flex: 1; display: flex; flex-direction: column; align-items: center;
+        height: 100%; justify-content: flex-end;
+      }
+      .m-mini-bar {
+        width: 100%; max-width: 20px; background: #1f6feb;
+        border-radius: 2px 2px 0 0; min-height: 2px;
+      }
+      .m-mini-label { font-size: 9px; opacity: 0.3; margin-top: 2px; }
+      .m-detail-session-row {
+        display: grid; grid-template-columns: 1fr auto auto;
+        gap: 8px; padding: 4px 0; font-size: 13px;
+        border-bottom: 1px solid var(--border);
+      }
+      .m-detail-session-key { font-size: 12px; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; }
     </style>
+
+    <!-- Date range pills -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <div class="m-pills">
+        ${daysPills.map(
+          (p) => html`
+          <button class="m-pill ${props.days === p.value ? "active" : ""}"
+            @click=${() => props.onDaysChange(p.value)}>${p.label}</button>
+        `,
+        )}
+      </div>
+    </div>
 
     <!-- Top stats -->
     <div class="m-grid">
@@ -209,15 +469,13 @@ export function renderMetrics(props: MetricsProps) {
       </div>
       <div class="m-stat-card">
         <div class="m-stat-value">${formatCost(d.allTime.cost)}</div>
-        <div class="m-stat-label">All Time</div>
+        <div class="m-stat-label">${d.days ? `${d.days}d Total` : "All Time"}</div>
         <div class="m-stat-sub" style="opacity:0.5">${d.allTime.events.toLocaleString()} events</div>
       </div>
       <div class="m-stat-card">
         <div class="m-stat-value">${formatTokens(d.allTime.inputTokens + d.allTime.outputTokens)}</div>
         <div class="m-stat-label">Total Tokens</div>
-        <div class="m-stat-sub" style="opacity:0.5">
-          ${formatTokens(d.allTime.cacheTokens)} cache
-        </div>
+        <div class="m-stat-sub" style="opacity:0.5">${formatTokens(d.allTime.cacheTokens)} cache</div>
       </div>
     </div>
 
@@ -231,33 +489,77 @@ export function renderMetrics(props: MetricsProps) {
 
     <!-- Daily chart -->
     <div class="m-section">
-      <div class="m-section-title">Daily Cost — Last 14 Days</div>
-      ${renderDailyChart(d.daily, d.weekAvg.cost)}
+      <div class="m-section-header">
+        <div class="m-section-title">Daily Cost</div>
+        <div style="font-size:11px;opacity:0.4">Click a bar for details</div>
+      </div>
+      ${renderDailyChart(d.daily, d.weekAvg.cost, props.onSelectDay, props.selectedDay)}
     </div>
+
+    <!-- Day detail panel -->
+    ${
+      props.selectedDay && props.dayDetail
+        ? html`
+      <div class="m-detail-overlay">
+        <button class="m-detail-close" @click=${props.onCloseDetail}>✕</button>
+        ${renderDayDetail(props.dayDetail, props.dayDetailLoading, props.onNavigateSession)}
+      </div>
+    `
+        : props.selectedDay && props.dayDetailLoading
+          ? html`
+      <div class="m-detail-overlay">
+        <button class="m-detail-close" @click=${props.onCloseDetail}>✕</button>
+        <div class="muted" style="padding:12px">Loading day detail…</div>
+      </div>
+    `
+          : nothing
+    }
 
     <!-- Model breakdown -->
     <div class="m-section">
-      <div class="m-section-title">Cost by Model</div>
-      ${renderModelTable(d.byModel, d.allTime.cost)}
+      <div class="m-section-header">
+        <div class="m-section-title">Cost by Model</div>
+        <div style="font-size:11px;opacity:0.4">Click a model for details</div>
+      </div>
+      ${renderModelTable(d.byModel, d.allTime.cost, props.onSelectModel, props.selectedModel)}
     </div>
+
+    <!-- Model detail panel -->
+    ${
+      props.selectedModel && props.modelDetail
+        ? html`
+      <div class="m-detail-overlay">
+        <button class="m-detail-close" @click=${props.onCloseDetail}>✕</button>
+        ${renderModelDetail(props.modelDetail, props.modelDetailLoading)}
+      </div>
+    `
+        : props.selectedModel && props.modelDetailLoading
+          ? html`
+      <div class="m-detail-overlay">
+        <button class="m-detail-close" @click=${props.onCloseDetail}>✕</button>
+        <div class="muted" style="padding:12px">Loading model detail…</div>
+      </div>
+    `
+          : nothing
+    }
 
     <!-- Top sessions -->
     ${
       d.topSessions.length > 0
         ? html`
-          <div class="m-section">
-            <div class="m-section-title">Top Sessions (24h)</div>
-            ${d.topSessions.map(
-              (s) => html`
-                <div class="m-session-row">
-                  <div class="m-session-key">${s.session_key}</div>
-                  <div style="text-align:right;font-weight:600;">${formatCost(s.cost)}</div>
-                  <div style="text-align:right;opacity:0.4;font-size:11px;">${s.events} calls</div>
-                </div>
-              `,
-            )}
-          </div>
-        `
+        <div class="m-section">
+          <div class="m-section-title">Top Sessions (24h)</div>
+          ${d.topSessions.map(
+            (s) => html`
+              <div class="m-session-row" @click=${() => props.onNavigateSession(s.session_key)}
+                title="Click to view session">
+                <div class="m-session-key">${s.session_key}</div>
+                <div style="text-align:right;font-weight:600;">${formatCost(s.cost)}</div>
+                <div style="text-align:right;opacity:0.4;font-size:11px;">${s.events} calls</div>
+              </div>
+            `,
+          )}
+        </div>`
         : nothing
     }
 
