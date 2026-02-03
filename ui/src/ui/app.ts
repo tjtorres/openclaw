@@ -8,6 +8,7 @@ import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exe
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
+import type { TaskQueueCardDetail, TaskQueueSnapshot } from "./task-queue-types.ts";
 import type { ResolvedTheme, ThemeMode } from "./theme.ts";
 import type {
   AgentsListResult,
@@ -77,9 +78,15 @@ import {
 } from "./app-tool-stream.ts";
 import { resolveInjectedAssistantIdentity } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
-import { loadTaskQueue as loadTaskQueueInternal } from "./controllers/task-queue.ts";
+import {
+  loadTaskQueue as loadTaskQueueInternal,
+  loadCardDetail as loadCardDetailInternal,
+  moveCard as moveCardInternal,
+  approveCard as approveCardInternal,
+  addComment as addCommentInternal,
+  toggleCheckItem as toggleCheckItemInternal,
+} from "./controllers/task-queue.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
-import type { TaskQueueSnapshot } from "./task-queue-types.ts";
 import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types.ts";
 
 declare global {
@@ -240,6 +247,9 @@ export class OpenClawApp extends LitElement {
   @state() taskQueueLoading = false;
   @state() taskQueueSnapshot: TaskQueueSnapshot | null = null;
   @state() taskQueueError: string | null = null;
+  @state() taskQueueSelectedCardId: string | null = null;
+  @state() taskQueueCardDetail: TaskQueueCardDetail | null = null;
+  @state() taskQueueCardDetailLoading = false;
 
   @state() skillsLoading = false;
   @state() skillsReport: SkillStatusReport | null = null;
@@ -381,6 +391,45 @@ export class OpenClawApp extends LitElement {
 
   async loadTaskQueue() {
     await loadTaskQueueInternal(this as unknown as Parameters<typeof loadTaskQueueInternal>[0]);
+  }
+  async selectTaskQueueCard(cardId: string) {
+    await loadCardDetailInternal(
+      this as unknown as Parameters<typeof loadCardDetailInternal>[0],
+      cardId,
+    );
+  }
+  closeTaskQueueDetail() {
+    this.taskQueueSelectedCardId = null;
+    this.taskQueueCardDetail = null;
+  }
+  async moveTaskQueueCard(cardId: string, listId: string) {
+    await moveCardInternal(
+      this as unknown as Parameters<typeof moveCardInternal>[0],
+      cardId,
+      listId,
+    );
+    this.taskQueueSelectedCardId = null;
+    this.taskQueueCardDetail = null;
+  }
+  async approveTaskQueueCard(cardId: string) {
+    await approveCardInternal(this as unknown as Parameters<typeof approveCardInternal>[0], cardId);
+    this.taskQueueSelectedCardId = null;
+    this.taskQueueCardDetail = null;
+  }
+  async toggleTaskQueueCheckItem(cardId: string, checkItemId: string, complete: boolean) {
+    await toggleCheckItemInternal(
+      this as unknown as Parameters<typeof toggleCheckItemInternal>[0],
+      cardId,
+      checkItemId,
+      complete,
+    );
+  }
+  async addTaskQueueComment(cardId: string, text: string) {
+    await addCommentInternal(
+      this as unknown as Parameters<typeof addCommentInternal>[0],
+      cardId,
+      text,
+    );
   }
 
   async handleAbortChat() {

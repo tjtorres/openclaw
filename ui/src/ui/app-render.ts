@@ -340,7 +340,19 @@ export function renderApp(state: AppViewState) {
                 loading: state.taskQueueLoading,
                 snapshot: state.taskQueueSnapshot,
                 error: state.taskQueueError,
+                selectedCardId: state.taskQueueSelectedCardId,
+                cardDetail: state.taskQueueCardDetail,
+                cardDetailLoading: state.taskQueueCardDetailLoading,
                 onRefresh: () => state.loadTaskQueue(),
+                onSelectCard: (cardId: string) => state.selectTaskQueueCard(cardId),
+                onCloseDetail: () => state.closeTaskQueueDetail(),
+                onMoveCard: (cardId: string, listId: string) =>
+                  state.moveTaskQueueCard(cardId, listId),
+                onApproveCard: (cardId: string) => state.approveTaskQueueCard(cardId),
+                onToggleCheckItem: (cardId: string, checkItemId: string, complete: boolean) =>
+                  state.toggleTaskQueueCheckItem(cardId, checkItemId, complete),
+                onAddComment: (cardId: string, text: string) =>
+                  state.addTaskQueueComment(cardId, text),
               })
             : nothing
         }

@@ -5,8 +5,8 @@ import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exe
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
-import type { TaskQueueSnapshot } from "./task-queue-types.ts";
 import type { UiSettings } from "./storage.ts";
+import type { TaskQueueCardDetail, TaskQueueSnapshot } from "./task-queue-types.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
 import type { ThemeMode } from "./theme.ts";
 import type {
@@ -143,6 +143,15 @@ export type AppViewState = {
   taskQueueLoading: boolean;
   taskQueueSnapshot: TaskQueueSnapshot | null;
   taskQueueError: string | null;
+  taskQueueSelectedCardId: string | null;
+  taskQueueCardDetail: TaskQueueCardDetail | null;
+  taskQueueCardDetailLoading: boolean;
+  selectTaskQueueCard: (cardId: string) => void;
+  closeTaskQueueDetail: () => void;
+  moveTaskQueueCard: (cardId: string, listId: string) => void;
+  approveTaskQueueCard: (cardId: string) => void;
+  toggleTaskQueueCheckItem: (cardId: string, checkItemId: string, complete: boolean) => void;
+  addTaskQueueComment: (cardId: string, text: string) => void;
   skillsLoading: boolean;
   skillsReport: SkillStatusReport | null;
   skillsError: string | null;

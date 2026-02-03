@@ -1,10 +1,14 @@
 export type TaskQueueCard = {
   id: string;
   name: string;
+  desc: string;
   url: string | null;
   listId: string;
   listName: string | null;
   labels: string[];
+  labelIds: string[];
+  hasChecklists: boolean;
+  dateLastActivity: string;
 };
 
 export type TaskQueueList = {
@@ -18,4 +22,29 @@ export type TaskQueueSnapshot = {
   lists: TaskQueueList[];
   cards: TaskQueueCard[];
   fetchedAt: number;
+};
+
+export type TaskQueueComment = {
+  id: string;
+  date: string;
+  text: string;
+  author: string;
+};
+
+export type TaskQueueCheckItem = {
+  id: string;
+  name: string;
+  complete: boolean;
+};
+
+export type TaskQueueChecklist = {
+  id: string;
+  name: string;
+  items: TaskQueueCheckItem[];
+};
+
+export type TaskQueueCardDetail = {
+  card: Record<string, unknown>;
+  comments: TaskQueueComment[];
+  checklists: TaskQueueChecklist[];
 };

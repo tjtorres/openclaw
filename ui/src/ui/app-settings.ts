@@ -188,6 +188,21 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "task-queue") {
     const app = host as unknown as OpenClawApp;
     await app.loadTaskQueue();
+    // Auto-refresh every 30s while on this tab
+    if ((app as unknown as Record<string, unknown>)._tqRefreshTimer) {
+      clearInterval((app as unknown as Record<string, unknown>)._tqRefreshTimer as number);
+    }
+    (app as unknown as Record<string, unknown>)._tqRefreshTimer = setInterval(() => {
+      if (app.tab === "task-queue" && !app.taskQueueLoading) {
+        app.loadTaskQueue();
+      }
+    }, 30000);
+  } else {
+    const app = host as unknown as Record<string, unknown>;
+    if (app._tqRefreshTimer) {
+      clearInterval(app._tqRefreshTimer as number);
+      app._tqRefreshTimer = null;
+    }
   }
   if (host.tab === "skills") {
     await loadSkills(host as unknown as OpenClawApp);

@@ -81,6 +81,13 @@ const BASE_METHODS = [
   "agent.identity.get",
   "agent.wait",
   "browser.request",
+  // Task Queue
+  "taskQueue.list",
+  "taskQueue.cardDetail",
+  "taskQueue.moveCard",
+  "taskQueue.approveCard",
+  "taskQueue.addComment",
+  "taskQueue.toggleCheckItem",
   // WebChat WebSocket-native chat methods
   "chat.history",
   "chat.abort",
