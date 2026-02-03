@@ -77,7 +77,9 @@ import {
 } from "./app-tool-stream.ts";
 import { resolveInjectedAssistantIdentity } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
+import { loadTaskQueue as loadTaskQueueInternal } from "./controllers/task-queue.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
+import type { TaskQueueSnapshot } from "./task-queue-types.ts";
 import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types.ts";
 
 declare global {
@@ -235,6 +237,10 @@ export class OpenClawApp extends LitElement {
   @state() cronRuns: CronRunLogEntry[] = [];
   @state() cronBusy = false;
 
+  @state() taskQueueLoading = false;
+  @state() taskQueueSnapshot: TaskQueueSnapshot | null = null;
+  @state() taskQueueError: string | null = null;
+
   @state() skillsLoading = false;
   @state() skillsReport: SkillStatusReport | null = null;
   @state() skillsError: string | null = null;
@@ -371,6 +377,10 @@ export class OpenClawApp extends LitElement {
 
   async loadCron() {
     await loadCronInternal(this as unknown as Parameters<typeof loadCronInternal>[0]);
+  }
+
+  async loadTaskQueue() {
+    await loadTaskQueueInternal(this as unknown as Parameters<typeof loadTaskQueueInternal>[0]);
   }
 
   async handleAbortChat() {

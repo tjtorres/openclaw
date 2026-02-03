@@ -185,6 +185,10 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "cron") {
     await loadCron(host);
   }
+  if (host.tab === "task-queue") {
+    const app = host as unknown as OpenClawApp;
+    await app.loadTaskQueue();
+  }
   if (host.tab === "skills") {
     await loadSkills(host as unknown as OpenClawApp);
   }

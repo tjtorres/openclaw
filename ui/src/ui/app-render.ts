@@ -68,6 +68,7 @@ import { renderNodes } from "./views/nodes.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
+import { renderTaskQueue } from "./views/task-queue.ts";
 
 const AVATAR_DATA_RE = /^data:/i;
 const AVATAR_HTTP_RE = /^https?:\/\//i;
@@ -329,6 +330,17 @@ export function renderApp(state: AppViewState) {
                 onRun: (job) => runCronJob(state, job),
                 onRemove: (job) => removeCronJob(state, job),
                 onLoadRuns: (jobId) => loadCronRuns(state, jobId),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "task-queue"
+            ? renderTaskQueue({
+                loading: state.taskQueueLoading,
+                snapshot: state.taskQueueSnapshot,
+                error: state.taskQueueError,
+                onRefresh: () => state.loadTaskQueue(),
               })
             : nothing
         }
