@@ -30,6 +30,7 @@ import type {
   NostrProfile,
 } from "./types.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
+import type { MetricsData } from "./views/metrics.ts";
 import {
   handleChannelConfigReload as handleChannelConfigReloadInternal,
   handleChannelConfigSave as handleChannelConfigSaveInternal,
@@ -250,6 +251,9 @@ export class OpenClawApp extends LitElement {
   @state() taskQueueSelectedCardId: string | null = null;
   @state() taskQueueCardDetail: TaskQueueCardDetail | null = null;
   @state() taskQueueCardDetailLoading = false;
+  @state() metricsLoading = false;
+  @state() metricsData: MetricsData | null = null;
+  @state() metricsError: string | null = null;
 
   @state() skillsLoading = false;
   @state() skillsReport: SkillStatusReport | null = null;
@@ -438,6 +442,20 @@ export class OpenClawApp extends LitElement {
       cardId,
       text,
     );
+  }
+
+  async loadMetrics() {
+    if (!this.client || !this.connected || this.metricsLoading) return;
+    this.metricsLoading = true;
+    this.metricsError = null;
+    try {
+      const res = await this.client.request<MetricsData>("metrics.overview", {});
+      this.metricsData = res;
+    } catch (err) {
+      this.metricsError = String(err);
+    } finally {
+      this.metricsLoading = false;
+    }
   }
 
   async handleAbortChat() {

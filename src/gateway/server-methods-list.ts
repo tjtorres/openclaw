@@ -89,6 +89,8 @@ const BASE_METHODS = [
   "taskQueue.addComment",
   "taskQueue.toggleCheckItem",
   "taskQueue.markSeen",
+  // Metrics
+  "metrics.overview",
   // WebChat WebSocket-native chat methods
   "chat.history",
   "chat.abort",

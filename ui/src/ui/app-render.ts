@@ -64,6 +64,7 @@ import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderInstances } from "./views/instances.ts";
 import { renderLogs } from "./views/logs.ts";
+import { renderMetrics } from "./views/metrics.ts";
 import { renderNodes } from "./views/nodes.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
@@ -353,6 +354,17 @@ export function renderApp(state: AppViewState) {
                   state.toggleTaskQueueCheckItem(cardId, checkItemId, complete),
                 onAddComment: (cardId: string, text: string) =>
                   state.addTaskQueueComment(cardId, text),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "metrics"
+            ? renderMetrics({
+                loading: state.metricsLoading,
+                data: state.metricsData,
+                error: state.metricsError,
+                onRefresh: () => state.loadMetrics(),
               })
             : nothing
         }

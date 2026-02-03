@@ -204,6 +204,10 @@ export async function refreshActiveTab(host: SettingsHost) {
       app._tqRefreshTimer = null;
     }
   }
+  if (host.tab === "metrics") {
+    const app = host as unknown as OpenClawApp;
+    await app.loadMetrics();
+  }
   if (host.tab === "skills") {
     await loadSkills(host as unknown as OpenClawApp);
   }

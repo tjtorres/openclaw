@@ -6,7 +6,7 @@ export const TAB_GROUPS = [
     label: "Control",
     tabs: ["overview", "channels", "instances", "sessions", "cron"],
   },
-  { label: "Work", tabs: ["task-queue"] },
+  { label: "Work", tabs: ["task-queue", "metrics"] },
   { label: "Agent", tabs: ["agents", "skills", "nodes"] },
   { label: "Settings", tabs: ["config", "debug", "logs"] },
 ] as const;
@@ -19,6 +19,7 @@ export type Tab =
   | "sessions"
   | "cron"
   | "task-queue"
+  | "metrics"
   | "skills"
   | "nodes"
   | "chat"
@@ -34,6 +35,7 @@ const TAB_PATHS: Record<Tab, string> = {
   sessions: "/sessions",
   cron: "/cron",
   "task-queue": "/task-queue",
+  metrics: "/metrics",
   skills: "/skills",
   nodes: "/nodes",
   chat: "/chat",
@@ -141,6 +143,8 @@ export function iconForTab(tab: Tab): IconName {
       return "loader";
     case "task-queue":
       return "check";
+    case "metrics":
+      return "barChart";
     case "skills":
       return "zap";
     case "nodes":
@@ -172,6 +176,8 @@ export function titleForTab(tab: Tab) {
       return "Cron Jobs";
     case "task-queue":
       return "Task Queue";
+    case "metrics":
+      return "Metrics";
     case "skills":
       return "Skills";
     case "nodes":
@@ -205,6 +211,8 @@ export function subtitleForTab(tab: Tab) {
       return "Schedule wakeups and recurring agent runs.";
     case "task-queue":
       return "Kanban view of the task queue board.";
+    case "metrics":
+      return "Cost, token usage, and efficiency tracking.";
     case "skills":
       return "Manage skill availability and API key injection.";
     case "nodes":
