@@ -3,6 +3,7 @@ import type { GatewayHelloOk } from "../gateway.ts";
 import type { UiSettings } from "../storage.ts";
 import { formatAgo, formatDurationMs } from "../format.ts";
 import { formatNextRun } from "../presenter.ts";
+import { renderActivityFeed, type ActivityFeedData } from "./activity-feed.ts";
 
 export type OverviewProps = {
   connected: boolean;
@@ -15,6 +16,9 @@ export type OverviewProps = {
   cronEnabled: boolean | null;
   cronNext: number | null;
   lastChannelsRefresh: number | null;
+  activityLoading: boolean;
+  activityData: ActivityFeedData | null;
+  activityError: string | null;
   onSettingsChange: (next: UiSettings) => void;
   onPasswordChange: (next: string) => void;
   onSessionKeyChange: (next: string) => void;
@@ -237,6 +241,14 @@ export function renderOverview(props: OverviewProps) {
         </div>
         <div class="muted">Next wake ${formatNextRun(props.cronNext)}</div>
       </div>
+    </section>
+
+    <section style="margin-top: 18px;">
+      ${renderActivityFeed({
+        loading: props.activityLoading,
+        data: props.activityData,
+        error: props.activityError,
+      })}
     </section>
 
     <section class="card" style="margin-top: 18px;">

@@ -29,6 +29,7 @@ import type {
   StatusSummary,
 } from "./types.ts";
 import type { ChatAttachment, ChatQueueItem, CronFormState } from "./ui-types.ts";
+import type { ActivityFeedData } from "./views/activity-feed.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
 import type { DayDetailData, MetricsData, ModelDetailData } from "./views/metrics.ts";
 
@@ -154,6 +155,9 @@ export type AppViewState = {
   approveTaskQueueCard: (cardId: string) => void;
   toggleTaskQueueCheckItem: (cardId: string, checkItemId: string, complete: boolean) => void;
   addTaskQueueComment: (cardId: string, text: string) => void;
+  activityLoading: boolean;
+  activityData: ActivityFeedData | null;
+  activityError: string | null;
   metricsLoading: boolean;
   metricsData: MetricsData | null;
   metricsError: string | null;

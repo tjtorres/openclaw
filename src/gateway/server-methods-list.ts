@@ -93,6 +93,8 @@ const BASE_METHODS = [
   "metrics.overview",
   "metrics.modelDetail",
   "metrics.dayDetail",
+  // Activity
+  "activity.feed",
   // Issues
   "issues.list",
   "issues.create",

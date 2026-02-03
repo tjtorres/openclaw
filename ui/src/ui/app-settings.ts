@@ -170,6 +170,16 @@ export function setTheme(host: SettingsHost, next: ThemeMode, context?: ThemeTra
 }
 
 export async function refreshActiveTab(host: SettingsHost) {
+  // Activity feed polling
+  {
+    const app = host as unknown as OpenClawApp;
+    if (host.tab === "overview") {
+      void app.loadActivity();
+      app.startActivityPolling();
+    } else {
+      app.stopActivityPolling();
+    }
+  }
   if (host.tab === "overview") {
     await loadOverview(host);
   }

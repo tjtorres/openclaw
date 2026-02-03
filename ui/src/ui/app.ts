@@ -31,6 +31,7 @@ import type {
   StatusSummary,
   NostrProfile,
 } from "./types.ts";
+import type { ActivityFeedData } from "./views/activity-feed.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
 import type { DayDetailData, MetricsData, ModelDetailData } from "./views/metrics.ts";
 import {
@@ -259,6 +260,10 @@ export class OpenClawApp extends LitElement {
   @state() taskQueueSelectedCardId: string | null = null;
   @state() taskQueueCardDetail: TaskQueueCardDetail | null = null;
   @state() taskQueueCardDetailLoading = false;
+  @state() activityLoading = false;
+  @state() activityData: ActivityFeedData | null = null;
+  @state() activityError: string | null = null;
+  private activityPollTimer: number | null = null;
   @state() metricsLoading = false;
   @state() metricsData: MetricsData | null = null;
   @state() metricsError: string | null = null;
@@ -462,6 +467,36 @@ export class OpenClawApp extends LitElement {
       cardId,
       text,
     );
+  }
+
+  async loadActivity() {
+    if (!this.client || !this.connected) return;
+    this.activityLoading = true;
+    try {
+      const res = await this.client.request<ActivityFeedData>("activity.feed", { limit: 30 });
+      this.activityData = res;
+      this.activityError = null;
+    } catch (err) {
+      this.activityError = String(err);
+    } finally {
+      this.activityLoading = false;
+    }
+  }
+
+  startActivityPolling() {
+    this.stopActivityPolling();
+    this.activityPollTimer = window.setInterval(() => {
+      if (this.connected && !this.activityLoading) {
+        void this.loadActivity();
+      }
+    }, 10000); // every 10s
+  }
+
+  stopActivityPolling() {
+    if (this.activityPollTimer != null) {
+      window.clearInterval(this.activityPollTimer);
+      this.activityPollTimer = null;
+    }
   }
 
   async loadMetrics() {
