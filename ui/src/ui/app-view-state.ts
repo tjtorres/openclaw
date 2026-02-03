@@ -158,6 +158,9 @@ export type AppViewState = {
   activityLoading: boolean;
   activityData: ActivityFeedData | null;
   activityError: string | null;
+  agentActivityStatus: "idle" | "working";
+  agentActivityLastEvent: number;
+  agentActivitySession: string | null;
   metricsLoading: boolean;
   metricsData: MetricsData | null;
   metricsError: string | null;

@@ -263,6 +263,9 @@ export class OpenClawApp extends LitElement {
   @state() activityLoading = false;
   @state() activityData: ActivityFeedData | null = null;
   @state() activityError: string | null = null;
+  @state() agentActivityStatus: "idle" | "working" = "idle";
+  @state() agentActivityLastEvent: number = 0;
+  @state() agentActivitySession: string | null = null;
   private activityPollTimer: number | null = null;
   @state() metricsLoading = false;
   @state() metricsData: MetricsData | null = null;

@@ -186,6 +186,14 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       host as unknown as Parameters<typeof handleAgentEvent>[0],
       evt.payload as AgentEventPayload | undefined,
     );
+    // Track agent activity status for the activity feed
+    const agentPayload = evt.payload as AgentEventPayload | undefined;
+    if (agentPayload) {
+      const app = host as unknown as OpenClawApp;
+      app.agentActivityStatus = "working";
+      app.agentActivityLastEvent = Date.now();
+      app.agentActivitySession = (agentPayload as Record<string, unknown>).sessionKey as string ?? null;
+    }
     return;
   }
 
@@ -201,6 +209,10 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     if (state === "final" || state === "error" || state === "aborted") {
       resetToolStream(host as unknown as Parameters<typeof resetToolStream>[0]);
       void flushChatQueueForEvent(host as unknown as Parameters<typeof flushChatQueueForEvent>[0]);
+      // Mark agent as idle
+      const app = host as unknown as OpenClawApp;
+      app.agentActivityStatus = "idle";
+      app.agentActivityLastEvent = Date.now();
       const runId = payload?.runId;
       if (runId && host.refreshSessionsAfterChat.has(runId)) {
         host.refreshSessionsAfterChat.delete(runId);

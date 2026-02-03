@@ -19,6 +19,9 @@ export type OverviewProps = {
   activityLoading: boolean;
   activityData: ActivityFeedData | null;
   activityError: string | null;
+  agentStatus: "idle" | "working";
+  agentLastEvent: number;
+  agentSession: string | null;
   onSettingsChange: (next: UiSettings) => void;
   onPasswordChange: (next: string) => void;
   onSessionKeyChange: (next: string) => void;
@@ -248,6 +251,9 @@ export function renderOverview(props: OverviewProps) {
         loading: props.activityLoading,
         data: props.activityData,
         error: props.activityError,
+        agentStatus: props.agentStatus,
+        agentLastEvent: props.agentLastEvent,
+        agentSession: props.agentSession,
       })}
     </section>
 

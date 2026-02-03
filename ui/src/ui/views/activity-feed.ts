@@ -25,6 +25,9 @@ export type ActivityFeedProps = {
   loading: boolean;
   data: ActivityFeedData | null;
   error: string | null;
+  agentStatus?: "idle" | "working";
+  agentLastEvent?: number;
+  agentSession?: string | null;
 };
 
 function timeAgo(ts: string): string {
@@ -185,10 +188,15 @@ export function renderActivityFeed(props: ActivityFeedProps) {
       }
     </style>
 
-    <div class="af-panel ${task ? "" : "af-idle"}">
+    <div class="af-panel ${props.agentStatus === "working" ? "" : "af-idle"}">
       <div class="af-header">
         <div class="af-pulse"></div>
         <div class="af-title">Agent Activity</div>
+        ${
+          props.agentStatus === "working"
+            ? html`<div class="af-time" style="color:#238636;opacity:1">⚡ Working</div>`
+            : html`<div class="af-time">💤 Idle</div>`
+        }
         ${
           d.entries.length > 0
             ? html`<div class="af-time">${timeAgo(d.entries[0].ts)}</div>`

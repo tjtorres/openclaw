@@ -217,6 +217,9 @@ export function renderApp(state: AppViewState) {
                 activityLoading: state.activityLoading,
                 activityData: state.activityData,
                 activityError: state.activityError,
+                agentStatus: state.agentActivityStatus,
+                agentLastEvent: state.agentActivityLastEvent,
+                agentSession: state.agentActivitySession,
                 onSettingsChange: (next) => state.applySettings(next),
                 onPasswordChange: (next) => (state.password = next),
                 onSessionKeyChange: (next) => {
