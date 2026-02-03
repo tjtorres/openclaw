@@ -8,6 +8,9 @@ export type TaskQueueCard = {
   labels: string[];
   labelIds: string[];
   hasChecklists: boolean;
+  checkItems: number;
+  checkItemsChecked: number;
+  commentCount: number;
   dateLastActivity: string;
 };
 

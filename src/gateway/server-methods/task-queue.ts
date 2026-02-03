@@ -93,7 +93,7 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
           config.apiToken,
         ) as Promise<Array<{ id: string; name: string; closed: boolean }>>,
         fetchTrello(
-          `/boards/${config.boardId}/cards?fields=name,desc,idList,url,labels,idChecklists,dateLastActivity`,
+          `/boards/${config.boardId}/cards?fields=name,desc,idList,url,labels,idChecklists,dateLastActivity,badges`,
           config.apiKey,
           config.apiToken,
         ) as Promise<
@@ -106,6 +106,7 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
             labels: Array<{ id: string; name: string }>;
             idChecklists: string[];
             dateLastActivity: string;
+            badges: { checkItems: number; checkItemsChecked: number; comments: number };
           }>
         >,
       ]);
@@ -129,6 +130,9 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
           labels: c.labels.map((l) => l.name),
           labelIds: c.labels.map((l) => l.id),
           hasChecklists: (c.idChecklists?.length ?? 0) > 0,
+          checkItems: c.badges?.checkItems ?? 0,
+          checkItemsChecked: c.badges?.checkItemsChecked ?? 0,
+          commentCount: c.badges?.comments ?? 0,
           dateLastActivity: c.dateLastActivity,
         })),
         fetchedAt: Date.now(),
