@@ -1,5 +1,5 @@
 import type { GatewayBrowserClient } from "../gateway.ts";
-import type { TaskQueueCardDetail, TaskQueueSnapshot } from "../task-queue-types.ts";
+import type { CardMetrics, TaskQueueCardDetail, TaskQueueSnapshot } from "../task-queue-types.ts";
 
 export type TaskQueueState = {
   client: GatewayBrowserClient | null;
@@ -10,6 +10,8 @@ export type TaskQueueState = {
   taskQueueSelectedCardId: string | null;
   taskQueueCardDetail: TaskQueueCardDetail | null;
   taskQueueCardDetailLoading: boolean;
+  taskQueueCardMetrics: CardMetrics | null;
+  taskQueueCardMetricsLoading: boolean;
 };
 
 export async function loadTaskQueue(state: TaskQueueState) {
@@ -32,6 +34,8 @@ export async function loadCardDetail(state: TaskQueueState, cardId: string) {
   state.taskQueueSelectedCardId = cardId;
   state.taskQueueCardDetailLoading = true;
   state.taskQueueCardDetail = null;
+  state.taskQueueCardMetrics = null;
+  state.taskQueueCardMetricsLoading = true;
   try {
     const [res] = await Promise.all([
       state.client.request<TaskQueueCardDetail>("taskQueue.cardDetail", { cardId }),
@@ -39,6 +43,10 @@ export async function loadCardDetail(state: TaskQueueState, cardId: string) {
       state.client.request("taskQueue.markSeen", { cardId }).catch(() => {}),
     ]);
     state.taskQueueCardDetail = res;
+    // Fetch metrics in parallel (non-blocking)
+    state.client.request<CardMetrics>("taskQueue.cardMetrics", { cardId })
+      .then((m) => { state.taskQueueCardMetrics = m; state.taskQueueCardMetricsLoading = false; })
+      .catch(() => { state.taskQueueCardMetricsLoading = false; });
     // Update the snapshot to remove "New" label from the card locally
     if (state.taskQueueSnapshot) {
       const card = state.taskQueueSnapshot.cards.find((c) => c.id === cardId);

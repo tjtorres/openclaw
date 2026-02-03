@@ -1,7 +1,67 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { GatewayRequestHandlers } from "./types.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
+
+type SqliteDatabase = import("node:sqlite").DatabaseSync;
+
+function workspacePath(): string {
+  return (
+    process.env.OPENCLAW_WORKSPACE ??
+    join(process.env.HOME ?? "/home/teej", ".openclaw", "workspace")
+  );
+}
+
+function getCostDb(): SqliteDatabase | null {
+  try {
+    const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
+    const dbPath = join(workspacePath(), "usage_costs.sqlite");
+    if (!existsSync(dbPath)) return null;
+    return new DatabaseSync(dbPath, { readOnly: true });
+  } catch {
+    return null;
+  }
+}
+
+type ActivityEntry = {
+  ts: string;
+  category: string;
+  cardId?: string;
+  cardName?: string;
+  message?: string;
+};
+
+/** Build time windows for a card from activity.jsonl (activate → done/next activate). */
+function getCardTimeWindows(cardId: string): Array<{ start: string; end: string | null }> {
+  const logPath = join(workspacePath(), "activity.jsonl");
+  if (!existsSync(logPath)) return [];
+
+  const lines = readFileSync(logPath, "utf-8").trim().split("\n").filter(Boolean);
+  const entries: ActivityEntry[] = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+
+  const windows: Array<{ start: string; end: string | null }> = [];
+  let currentStart: string | null = null;
+
+  for (const entry of entries) {
+    if (entry.category === "activate" && entry.cardId === cardId) {
+      currentStart = entry.ts;
+    } else if (currentStart && entry.category === "activate" && entry.cardId !== cardId) {
+      // Different card activated — close window
+      windows.push({ start: currentStart, end: entry.ts });
+      currentStart = null;
+    } else if (currentStart && entry.category === "done" && entry.cardId === cardId) {
+      windows.push({ start: currentStart, end: entry.ts });
+      currentStart = null;
+    }
+  }
+
+  // If card is still active, window is open
+  if (currentStart) {
+    windows.push({ start: currentStart, end: null });
+  }
+
+  return windows;
+}
 
 function readTaskQueueConfig(): {
   boardId: string;
@@ -372,6 +432,120 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
         false,
         undefined,
         errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to mark seen: ${String(err)}`),
+      );
+    }
+  },
+
+  "taskQueue.cardMetrics": ({ params, respond }) => {
+    const { cardId } = params as { cardId?: string };
+    if (!cardId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "cardId required"));
+      return;
+    }
+
+    const windows = getCardTimeWindows(cardId);
+    if (windows.length === 0) {
+      respond(true, {
+        cardId,
+        windows: [],
+        totalCost: 0,
+        totalEvents: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheTokens: 0,
+        totalDurationMin: 0,
+        byModel: [],
+        fetchedAt: Date.now(),
+      });
+      return;
+    }
+
+    const db = getCostDb();
+    if (!db) {
+      respond(true, {
+        cardId,
+        windows,
+        totalCost: 0,
+        totalEvents: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheTokens: 0,
+        totalDurationMin: 0,
+        byModel: [],
+        noDb: true,
+        fetchedAt: Date.now(),
+      });
+      return;
+    }
+
+    try {
+      // Build a UNION of time window conditions
+      const conditions = windows.map((w) => {
+        const start = w.start.replace(/'/g, "''");
+        if (w.end) {
+          const end = w.end.replace(/'/g, "''");
+          return `(ts >= '${start}' AND ts <= '${end}')`;
+        }
+        return `(ts >= '${start}')`;
+      });
+      const whereClause = conditions.join(" OR ");
+
+      const summary = db.prepare(
+        `SELECT COUNT(*) as events, ROUND(COALESCE(SUM(cost_total), 0), 4) as cost,
+          COALESCE(SUM(input_tokens), 0) as input_tokens,
+          COALESCE(SUM(output_tokens), 0) as output_tokens,
+          COALESCE(SUM(cache_read), 0) as cache_tokens,
+          MIN(ts) as first_event, MAX(ts) as last_event
+         FROM usage_events WHERE ${whereClause}`,
+      ).all();
+
+      const byModel = db.prepare(
+        `SELECT model, COUNT(*) as events, ROUND(SUM(cost_total), 4) as cost,
+          SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens
+         FROM usage_events WHERE (${whereClause})
+         AND model NOT IN ('unknown', 'delivery-mirror')
+         GROUP BY model ORDER BY cost DESC`,
+      ).all();
+
+      db.close();
+
+      const s = (summary[0] ?? {}) as Record<string, unknown>;
+
+      // Calculate total active time from windows
+      let totalDurationMs = 0;
+      for (const w of windows) {
+        const start = new Date(w.start).getTime();
+        const end = w.end ? new Date(w.end).getTime() : Date.now();
+        totalDurationMs += end - start;
+      }
+
+      respond(true, {
+        cardId,
+        windows: windows.map((w) => ({
+          start: w.start,
+          end: w.end,
+          durationMin: Math.round(
+            ((w.end ? new Date(w.end).getTime() : Date.now()) - new Date(w.start).getTime()) /
+              60000,
+          ),
+        })),
+        totalCost: Number(s.cost ?? 0),
+        totalEvents: Number(s.events ?? 0),
+        totalInputTokens: Number(s.input_tokens ?? 0),
+        totalOutputTokens: Number(s.output_tokens ?? 0),
+        totalCacheTokens: Number(s.cache_tokens ?? 0),
+        totalDurationMin: Math.round(totalDurationMs / 60000),
+        firstEvent: s.first_event ?? null,
+        lastEvent: s.last_event ?? null,
+        byModel,
+        fetchedAt: Date.now(),
+      });
+    } catch (err) {
+      try { db.close(); } catch {}
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INTERNAL_ERROR, `Card metrics query failed: ${String(err)}`),
       );
     }
   },

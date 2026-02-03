@@ -1,5 +1,6 @@
 import { html, nothing } from "lit";
 import type {
+  CardMetrics,
   TaskQueueCard,
   TaskQueueCardDetail,
   TaskQueueList,
@@ -13,6 +14,8 @@ export type TaskQueueProps = {
   selectedCardId: string | null;
   cardDetail: TaskQueueCardDetail | null;
   cardDetailLoading: boolean;
+  cardMetrics: CardMetrics | null;
+  cardMetricsLoading: boolean;
   onRefresh: () => void;
   onSelectCard: (cardId: string) => void;
   onCloseDetail: () => void;
@@ -154,6 +157,73 @@ function renderColumn(
   `;
 }
 
+function fmtCost(n: number): string {
+  return n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function renderCardMetrics(metrics: CardMetrics | null, loading: boolean) {
+  if (loading) {
+    return html`<div class="tq-section">
+      <div class="tq-section-title">📊 Metrics</div>
+      <div class="tq-muted">Loading metrics…</div>
+    </div>`;
+  }
+  if (!metrics || (metrics.totalEvents === 0 && metrics.windows.length === 0)) {
+    return nothing;
+  }
+
+  return html`<div class="tq-section">
+    <div class="tq-section-title">📊 Metrics</div>
+    <div class="tq-metrics-grid">
+      <div class="tq-metric-card">
+        <div class="tq-metric-value">${fmtCost(metrics.totalCost)}</div>
+        <div class="tq-metric-label">Total Cost</div>
+      </div>
+      <div class="tq-metric-card">
+        <div class="tq-metric-value">${metrics.totalDurationMin}m</div>
+        <div class="tq-metric-label">Active Time</div>
+      </div>
+      <div class="tq-metric-card">
+        <div class="tq-metric-value">${fmtTokens(metrics.totalInputTokens + metrics.totalOutputTokens)}</div>
+        <div class="tq-metric-label">Total Tokens</div>
+      </div>
+      <div class="tq-metric-card">
+        <div class="tq-metric-value">${metrics.totalEvents}</div>
+        <div class="tq-metric-label">API Calls</div>
+      </div>
+    </div>
+    ${metrics.byModel.length > 0 ? html`
+      <div class="tq-model-breakdown">
+        ${metrics.byModel.map(m => {
+          const pct = metrics.totalCost > 0 ? Math.round((m.cost / metrics.totalCost) * 100) : 0;
+          return html`
+            <div class="tq-model-row">
+              <span class="tq-model-name">${m.model}</span>
+              <span class="tq-model-bar-container">
+                <span class="tq-model-bar" style="width:${pct}%"></span>
+              </span>
+              <span class="tq-model-cost">${fmtCost(m.cost)}</span>
+            </div>`;
+        })}
+      </div>
+    ` : nothing}
+    ${metrics.windows.length > 0 ? html`
+      <div class="tq-work-windows">
+        <div class="tq-muted" style="font-size:11px;margin-top:8px;">
+          ${metrics.windows.length} work session${metrics.windows.length > 1 ? "s" : ""}
+          ${metrics.windows.some(w => !w.end) ? html` — <span style="color:#58a6ff">● active now</span>` : nothing}
+        </div>
+      </div>
+    ` : nothing}
+  </div>`;
+}
+
 function renderCardDetail(props: TaskQueueProps, card: TaskQueueCard, lists: TaskQueueList[]) {
   const detail = props.cardDetail;
   const loading = props.cardDetailLoading;
@@ -260,6 +330,9 @@ function renderCardDetail(props: TaskQueueProps, card: TaskQueueCard, lists: Tas
             </div>`
             : nothing
         }
+
+        <!-- Card Metrics -->
+        ${renderCardMetrics(props.cardMetrics, props.cardMetricsLoading)}
 
         <!-- Checklists -->
         ${
@@ -515,6 +588,32 @@ export function renderTaskQueue(props: TaskQueueProps) {
 
       .tq-refresh-bar {
         display: flex; align-items: center; gap: 8px; margin-left: auto;
+      }
+
+      /* Card Metrics */
+      .tq-metrics-grid {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      }
+      .tq-metric-card {
+        background: var(--bg-muted); border-radius: 8px; padding: 12px 10px;
+        text-align: center; border: 1px solid var(--border);
+      }
+      .tq-metric-value { font-size: 18px; font-weight: 700; color: var(--text); }
+      .tq-metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.5; margin-top: 2px; }
+      .tq-model-breakdown { margin-top: 12px; }
+      .tq-model-row {
+        display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px;
+      }
+      .tq-model-name { width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7; }
+      .tq-model-bar-container {
+        flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+      }
+      .tq-model-bar { height: 100%; background: #58a6ff; border-radius: 3px; transition: width 0.3s ease; }
+      .tq-model-cost { width: 60px; text-align: right; font-weight: 600; opacity: 0.8; }
+
+      @media (max-width: 600px) {
+        .tq-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+        .tq-model-name { width: 100px; }
       }
     </style>
 

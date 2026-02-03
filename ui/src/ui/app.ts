@@ -10,7 +10,7 @@ import type { IssuesListResult } from "./controllers/issues.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
-import type { TaskQueueCardDetail, TaskQueueSnapshot } from "./task-queue-types.ts";
+import type { CardMetrics, TaskQueueCardDetail, TaskQueueSnapshot } from "./task-queue-types.ts";
 import type { ResolvedTheme, ThemeMode } from "./theme.ts";
 import type {
   AgentsListResult,
@@ -260,6 +260,8 @@ export class OpenClawApp extends LitElement {
   @state() taskQueueSelectedCardId: string | null = null;
   @state() taskQueueCardDetail: TaskQueueCardDetail | null = null;
   @state() taskQueueCardDetailLoading = false;
+  @state() taskQueueCardMetrics: CardMetrics | null = null;
+  @state() taskQueueCardMetricsLoading = false;
   @state() activityLoading = false;
   @state() activityData: ActivityFeedData | null = null;
   @state() activityError: string | null = null;
@@ -441,6 +443,8 @@ export class OpenClawApp extends LitElement {
   closeTaskQueueDetail() {
     this.taskQueueSelectedCardId = null;
     this.taskQueueCardDetail = null;
+    this.taskQueueCardMetrics = null;
+    this.taskQueueCardMetricsLoading = false;
   }
   async moveTaskQueueCard(cardId: string, listId: string) {
     await moveCardInternal(
@@ -450,11 +454,13 @@ export class OpenClawApp extends LitElement {
     );
     this.taskQueueSelectedCardId = null;
     this.taskQueueCardDetail = null;
+    this.taskQueueCardMetrics = null;
   }
   async approveTaskQueueCard(cardId: string) {
     await approveCardInternal(this as unknown as Parameters<typeof approveCardInternal>[0], cardId);
     this.taskQueueSelectedCardId = null;
     this.taskQueueCardDetail = null;
+    this.taskQueueCardMetrics = null;
   }
   async toggleTaskQueueCheckItem(cardId: string, checkItemId: string, complete: boolean) {
     await toggleCheckItemInternal(

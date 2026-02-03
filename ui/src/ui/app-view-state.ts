@@ -7,7 +7,7 @@ import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
-import type { TaskQueueCardDetail, TaskQueueSnapshot } from "./task-queue-types.ts";
+import type { CardMetrics, TaskQueueCardDetail, TaskQueueSnapshot } from "./task-queue-types.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
 import type { ThemeMode } from "./theme.ts";
 import type {
@@ -149,6 +149,8 @@ export type AppViewState = {
   taskQueueSelectedCardId: string | null;
   taskQueueCardDetail: TaskQueueCardDetail | null;
   taskQueueCardDetailLoading: boolean;
+  taskQueueCardMetrics: CardMetrics | null;
+  taskQueueCardMetricsLoading: boolean;
   selectTaskQueueCard: (cardId: string) => void;
   closeTaskQueueDetail: () => void;
   moveTaskQueueCard: (cardId: string, listId: string) => void;

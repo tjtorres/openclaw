@@ -51,3 +51,27 @@ export type TaskQueueCardDetail = {
   comments: TaskQueueComment[];
   checklists: TaskQueueChecklist[];
 };
+
+export type CardMetricsModelBreakdown = {
+  model: string;
+  events: number;
+  cost: number;
+  input_tokens: number;
+  output_tokens: number;
+};
+
+export type CardMetrics = {
+  cardId: string;
+  windows: Array<{ start: string; end: string | null; durationMin: number }>;
+  totalCost: number;
+  totalEvents: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+  totalDurationMin: number;
+  firstEvent: string | null;
+  lastEvent: string | null;
+  byModel: CardMetricsModelBreakdown[];
+  noDb?: boolean;
+  fetchedAt: number;
+};

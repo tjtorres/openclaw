@@ -89,6 +89,7 @@ const BASE_METHODS = [
   "taskQueue.addComment",
   "taskQueue.toggleCheckItem",
   "taskQueue.markSeen",
+  "taskQueue.cardMetrics",
   // Metrics
   "metrics.overview",
   "metrics.modelDetail",
