@@ -88,6 +88,7 @@ const BASE_METHODS = [
   "taskQueue.approveCard",
   "taskQueue.addComment",
   "taskQueue.toggleCheckItem",
+  "taskQueue.markSeen",
   // WebChat WebSocket-native chat methods
   "chat.history",
   "chat.abort",

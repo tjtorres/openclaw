@@ -309,9 +309,16 @@ export class OpenClawApp extends LitElement {
     return this;
   }
 
+  private _handleKeydown = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && this.taskQueueSelectedCardId) {
+      this.closeTaskQueueDetail();
+    }
+  };
+
   connectedCallback() {
     super.connectedCallback();
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
+    document.addEventListener("keydown", this._handleKeydown);
   }
 
   protected firstUpdated() {
@@ -319,6 +326,7 @@ export class OpenClawApp extends LitElement {
   }
 
   disconnectedCallback() {
+    document.removeEventListener("keydown", this._handleKeydown);
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }

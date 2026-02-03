@@ -8,6 +8,7 @@ function readTaskQueueConfig(): {
   apiKey: string;
   apiToken: string;
   approvedLabelId: string;
+  newLabelId: string;
 } | null {
   try {
     const workspace =
@@ -22,7 +23,8 @@ function readTaskQueueConfig(): {
       boardId: config.boardId,
       apiKey,
       apiToken,
-      approvedLabelId: config.approvedLabelId ?? "",
+      approvedLabelId: config.labels?.approved ?? config.approvedLabelId ?? "",
+      newLabelId: config.labels?.new ?? "",
     };
   } catch {
     return null;
@@ -53,6 +55,12 @@ async function postTrello(
   });
   if (!res.ok) throw new Error(`Trello API error: ${res.status}`);
   return res.json();
+}
+
+async function deleteTrello(path: string, apiKey: string, apiToken: string): Promise<void> {
+  const url = trelloUrl(path, apiKey, apiToken);
+  const res = await fetch(url, { method: "DELETE" });
+  if (!res.ok && res.status !== 404) throw new Error(`Trello API error: ${res.status}`);
 }
 
 async function putTrello(
@@ -251,11 +259,19 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     }
 
     try {
-      // Add approved label
+      // Add approved label (ignore if already present)
       if (config.approvedLabelId) {
         await postTrello(`/cards/${cardId}/idLabels`, config.apiKey, config.apiToken, {
           value: config.approvedLabelId,
-        });
+        }).catch(() => {});
+      }
+      // Remove "New" label
+      if (config.newLabelId) {
+        await deleteTrello(
+          `/cards/${cardId}/idLabels/${config.newLabelId}`,
+          config.apiKey,
+          config.apiToken,
+        ).catch(() => {});
       }
       // Find the Approved list
       const lists = (await fetchTrello(
@@ -329,6 +345,33 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
         false,
         undefined,
         errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to toggle check item: ${String(err)}`),
+      );
+    }
+  },
+
+  "taskQueue.markSeen": async ({ params, respond }) => {
+    const config = requireConfig(respond);
+    if (!config) return;
+    const { cardId } = params as { cardId?: string };
+    if (!cardId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "cardId required"));
+      return;
+    }
+
+    try {
+      if (config.newLabelId) {
+        await deleteTrello(
+          `/cards/${cardId}/idLabels/${config.newLabelId}`,
+          config.apiKey,
+          config.apiToken,
+        ).catch(() => {});
+      }
+      respond(true, { ok: true });
+    } catch (err) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to mark seen: ${String(err)}`),
       );
     }
   },

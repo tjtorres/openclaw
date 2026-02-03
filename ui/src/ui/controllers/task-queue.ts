@@ -33,10 +33,25 @@ export async function loadCardDetail(state: TaskQueueState, cardId: string) {
   state.taskQueueCardDetailLoading = true;
   state.taskQueueCardDetail = null;
   try {
-    const res = await state.client.request<TaskQueueCardDetail>("taskQueue.cardDetail", {
-      cardId,
-    });
+    const [res] = await Promise.all([
+      state.client.request<TaskQueueCardDetail>("taskQueue.cardDetail", { cardId }),
+      // Mark card as seen (removes "New" label) — fire and forget
+      state.client.request("taskQueue.markSeen", { cardId }).catch(() => {}),
+    ]);
     state.taskQueueCardDetail = res;
+    // Update the snapshot to remove "New" label from the card locally
+    if (state.taskQueueSnapshot) {
+      const card = state.taskQueueSnapshot.cards.find((c) => c.id === cardId);
+      if (card) {
+        card.labels = card.labels.filter((l) => l !== "New");
+        card.labelIds = card.labelIds.filter(
+          (id) =>
+            !state.taskQueueSnapshot?.cards.some(
+              (c) => c.id === cardId && c.labelIds.includes(id) && c.labels.includes("New"),
+            ),
+        );
+      }
+    }
   } catch (err) {
     state.taskQueueError = `Card detail error: ${String(err)}`;
   } finally {

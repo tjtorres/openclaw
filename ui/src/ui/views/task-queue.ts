@@ -384,23 +384,23 @@ export function renderTaskQueue(props: TaskQueueProps) {
       .tq-stat-done .tq-stat-num { color: #238636; }
 
       .tq-overall-progress { flex: 1; min-width: 120px; max-width: 300px; }
-      .tq-overall-bar { height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
+      .tq-overall-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
       .tq-overall-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
       .tq-overall-text { font-size: 11px; opacity: 0.5; margin-top: 4px; }
 
       .tq-board { display: flex; gap: 10px; overflow-x: auto; padding: 4px 0 8px; min-height: 200px; margin-top: 16px; }
       .tq-column {
         min-width: 210px; max-width: 260px; flex: 1 0 210px;
-        background: rgba(255,255,255,0.03); border-radius: 10px;
+        background: var(--bg-hover); border-radius: 10px;
         display: flex; flex-direction: column;
       }
       .tq-column-header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding: 10px 12px; border-bottom: 1px solid var(--border);
       }
       .tq-column-title { font-weight: 600; font-size: 13px; }
       .tq-column-count {
-        font-size: 11px; background: rgba(255,255,255,0.08); padding: 2px 7px;
+        font-size: 11px; background: var(--border); padding: 2px 7px;
         border-radius: 10px; font-weight: 600;
       }
       .tq-column-body {
@@ -410,11 +410,11 @@ export function renderTaskQueue(props: TaskQueueProps) {
       .tq-empty { padding: 12px; text-align: center; opacity: 0.3; font-size: 13px; }
 
       .tq-card {
-        background: var(--bg-primary, #0f0f23); border: 1px solid rgba(255,255,255,0.08);
+        background: var(--panel); border: 1px solid var(--border);
         border-radius: 8px; padding: 10px 12px; cursor: pointer;
         transition: all 0.15s ease;
       }
-      .tq-card:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+      .tq-card:hover { border-color: var(--border-hover); transform: translateY(-1px); box-shadow: 0 2px 8px var(--shadow, rgba(0,0,0,0.15)); }
       .tq-card-selected { border-color: #58a6ff; box-shadow: 0 0 0 1px #58a6ff; }
       .tq-card-title { font-size: 13px; line-height: 1.4; font-weight: 500; }
       .tq-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
@@ -425,37 +425,37 @@ export function renderTaskQueue(props: TaskQueueProps) {
       .tq-label { font-size: 10px; padding: 1px 6px; border-radius: 3px; color: #fff; font-weight: 500; }
 
       .tq-progress { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-      .tq-progress-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+      .tq-progress-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
       .tq-progress-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
       .tq-progress-text { font-size: 10px; opacity: 0.5; white-space: nowrap; }
 
       /* Detail panel */
       .tq-overlay {
-        position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 100;
+        position: fixed; inset: 0; background: var(--overlay, rgba(0,0,0,0.5)); z-index: 100;
         display: flex; justify-content: center; align-items: flex-start;
         padding-top: 48px; overflow-y: auto; backdrop-filter: blur(4px);
       }
       .tq-panel {
-        background: var(--bg-primary, #0d1117); border: 1px solid rgba(255,255,255,0.1);
+        background: var(--panel); border: 1px solid var(--border-strong);
         border-radius: 14px; width: 95%; max-width: 640px; max-height: 85vh;
-        overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+        overflow-y: auto; box-shadow: 0 16px 48px var(--shadow-heavy, rgba(0,0,0,0.25));
       }
       .tq-panel-header { display: flex; gap: 12px; padding: 20px 20px 12px; }
       .tq-panel-title { font-size: 18px; font-weight: 600; line-height: 1.3; }
       .tq-panel-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
       .tq-list-badge {
         font-size: 12px; padding: 2px 8px; border-radius: 4px;
-        border: 1px solid; background: rgba(255,255,255,0.04);
+        border: 1px solid; background: var(--bg-muted);
       }
       .tq-pct-badge { font-size: 12px; font-weight: 600; margin-left: 4px; }
       .tq-close {
-        background: none; border: none; color: inherit; font-size: 20px;
+        background: none; border: none; color: var(--text); font-size: 20px;
         cursor: pointer; padding: 4px 8px; opacity: 0.4; border-radius: 6px;
       }
-      .tq-close:hover { opacity: 1; background: rgba(255,255,255,0.06); }
+      .tq-close:hover { opacity: 1; background: var(--border); }
       .tq-actions {
         display: flex; gap: 8px; align-items: center; padding: 0 20px 14px;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
+        border-bottom: 1px solid var(--border);
       }
       .tq-btn-approve {
         background: #238636; color: #fff; border: none; padding: 6px 14px;
@@ -463,8 +463,8 @@ export function renderTaskQueue(props: TaskQueueProps) {
       }
       .tq-btn-approve:hover { background: #2ea043; }
       .tq-select {
-        background: rgba(255,255,255,0.04); color: inherit;
-        border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+        background: var(--bg-muted); color: var(--text);
+        border: 1px solid var(--border-strong); border-radius: 6px;
         padding: 6px 10px; font-size: 13px;
       }
       .tq-trello-link { font-size: 12px; color: #58a6ff; margin-left: auto; text-decoration: none; }
@@ -475,7 +475,7 @@ export function renderTaskQueue(props: TaskQueueProps) {
       }
       @keyframes tq-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
 
-      .tq-section { padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.04); }
+      .tq-section { padding: 14px 20px; border-top: 1px solid var(--bg-muted); }
       .tq-section-title {
         font-size: 11px; font-weight: 600; text-transform: uppercase;
         letter-spacing: 0.5px; opacity: 0.4; margin-bottom: 8px;
@@ -483,7 +483,7 @@ export function renderTaskQueue(props: TaskQueueProps) {
       .tq-desc { font-size: 14px; line-height: 1.6; white-space: pre-wrap; opacity: 0.8; }
 
       .tq-big-progress { display: flex; align-items: center; gap: 12px; }
-      .tq-big-progress-bar { flex: 1; height: 10px; background: rgba(255,255,255,0.06); border-radius: 5px; overflow: hidden; }
+      .tq-big-progress-bar { flex: 1; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
       .tq-big-progress-fill { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
       .tq-big-progress-text { font-size: 13px; font-weight: 600; white-space: nowrap; }
 
@@ -494,24 +494,24 @@ export function renderTaskQueue(props: TaskQueueProps) {
       .tq-check input { margin-top: 2px; cursor: pointer; accent-color: #238636; }
       .tq-check-done { text-decoration: line-through; opacity: 0.4; }
 
-      .tq-comment { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+      .tq-comment { padding: 10px 0; border-bottom: 1px solid var(--bg-hover); }
       .tq-comment-head { display: flex; gap: 8px; align-items: center; font-size: 12px; margin-bottom: 4px; }
       .tq-comment-text { font-size: 13px; line-height: 1.5; white-space: pre-wrap; opacity: 0.8; }
       .tq-muted { opacity: 0.4; }
 
       .tq-textarea {
         width: 100%; box-sizing: border-box;
-        background: rgba(255,255,255,0.04); color: inherit;
-        border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+        background: var(--bg-muted); color: var(--text);
+        border: 1px solid var(--border-strong); border-radius: 8px;
         padding: 10px; font-family: inherit; font-size: 13px; resize: vertical;
       }
       .tq-textarea:focus { border-color: #58a6ff; outline: none; }
       .tq-btn-small {
-        margin-top: 8px; background: rgba(255,255,255,0.06); color: inherit;
-        border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+        margin-top: 8px; background: var(--border); color: var(--text);
+        border: 1px solid var(--border-strong); border-radius: 6px;
         padding: 6px 16px; font-size: 13px; cursor: pointer;
       }
-      .tq-btn-small:hover { background: rgba(255,255,255,0.1); }
+      .tq-btn-small:hover { background: var(--border-strong); }
 
       .tq-refresh-bar {
         display: flex; align-items: center; gap: 8px; margin-left: auto;
