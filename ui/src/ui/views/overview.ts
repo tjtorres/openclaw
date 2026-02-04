@@ -100,7 +100,7 @@ export function setAutoRunToggleHandler(handler: (enabled: boolean) => void) {
 function renderPermissionsWidget(perms: PermissionsSummary | null) {
   if (!perms || !perms.configured) {
     return html`<div class="card" style="padding: 12px 16px">
-      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px">Autonomy</div>
+      <div class="ov-widget-title">Autonomy</div>
       <div class="muted">Not configured</div>
     </div>`;
   }
@@ -109,38 +109,86 @@ function renderPermissionsWidget(perms: PermissionsSummary | null) {
   const pct = Math.round((perms.totalGranted / (perms.totalGranted + perms.totalDenied)) * 100);
 
   return html`
+    <style>
+      .ov-widget-title {
+        font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+        color: var(--text-muted);
+      }
+      .ov-perms-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 10px; gap: 8px; flex-wrap: wrap;
+      }
+      .ov-perms-controls {
+        display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+      }
+      .ov-perms-toggle {
+        font-size: 11px; padding: 3px 10px; border-radius: 10px;
+        cursor: pointer; font-weight: 600; transition: all 0.15s;
+      }
+      .ov-perms-level {
+        color: white; padding: 2px 10px; border-radius: 10px;
+        font-size: 12px; font-weight: 600;
+      }
+      .ov-perms-stats {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 12px; margin-bottom: 10px;
+      }
+      .ov-perms-stat-label { font-size: 11px; color: var(--text-muted); }
+      .ov-perms-stat-value { font-size: 14px; font-weight: 600; text-transform: capitalize; }
+      .ov-perms-bar {
+        height: 4px; background: var(--bg-hover, rgba(255,255,255,0.08));
+        border-radius: 2px; overflow: hidden;
+      }
+      .ov-perms-bar-fill { height: 100%; border-radius: 2px; }
+      .ov-perms-epochs {
+        margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;
+      }
+      .ov-perms-epoch {
+        font-size: 11px; padding: 1px 8px; border-radius: 8px;
+        background: rgba(255,255,255,0.06); color: var(--text-muted);
+      }
+      @media (max-width: 600px) {
+        .ov-perms-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .ov-perms-stat-value { font-size: 13px; }
+        .ov-perms-header { flex-direction: column; align-items: flex-start; }
+      }
+      @media (max-width: 400px) {
+        .ov-perms-stats { grid-template-columns: 1fr 1fr; }
+      }
+    </style>
     <div class="card" style="padding: 14px 18px">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px">
-        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted)">Autonomy & Permissions</div>
-        <div style="display: flex; align-items: center; gap: 8px">
+      <div class="ov-perms-header">
+        <div class="ov-widget-title">Autonomy & Permissions</div>
+        <div class="ov-perms-controls">
           <button
-            style="font-size: 11px; padding: 3px 10px; border-radius: 10px; border: 1px solid ${perms.autoRun ? '#43a047' : 'var(--border, #555)'}; background: ${perms.autoRun ? 'rgba(67,160,71,0.15)' : 'transparent'}; color: ${perms.autoRun ? '#66bb6a' : 'var(--text-muted)'}; cursor: pointer; font-weight: 600; transition: all 0.15s"
+            class="ov-perms-toggle"
+            style="border: 1px solid ${perms.autoRun ? '#43a047' : 'var(--border, #555)'}; background: ${perms.autoRun ? 'rgba(67,160,71,0.15)' : 'transparent'}; color: ${perms.autoRun ? '#66bb6a' : 'var(--text-muted)'}"
             @click=${() => _onToggleAutoRun?.(!perms.autoRun)}
             title="${perms.autoRun ? 'Auto-run ON: agent self-approves within permission level' : 'Auto-run OFF: agent needs explicit approval'}"
           >${perms.autoRun ? '⚡ Auto' : '🔒 Manual'}</button>
-          <span style="background: ${levelColor}; color: white; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600">${perms.levelLabel}</span>
+          <span class="ov-perms-level" style="background: ${levelColor}">${perms.levelLabel}</span>
         </div>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 10px">
+      <div class="ov-perms-stats">
         <div>
-          <div style="font-size: 11px; color: var(--text-muted)">Role</div>
-          <div style="font-size: 14px; font-weight: 600; text-transform: capitalize">${perms.role}</div>
+          <div class="ov-perms-stat-label">Role</div>
+          <div class="ov-perms-stat-value">${perms.role}</div>
         </div>
         <div>
-          <div style="font-size: 11px; color: var(--text-muted)">Budget</div>
-          <div style="font-size: 14px; font-weight: 600">$${perms.budgetPerDay}/day</div>
+          <div class="ov-perms-stat-label">Budget</div>
+          <div class="ov-perms-stat-value">$${perms.budgetPerDay}/day</div>
         </div>
         <div>
-          <div style="font-size: 11px; color: var(--text-muted)">Capabilities</div>
-          <div style="font-size: 14px; font-weight: 600">${perms.totalGranted}/${perms.totalGranted + perms.totalDenied}</div>
+          <div class="ov-perms-stat-label">Capabilities</div>
+          <div class="ov-perms-stat-value">${perms.totalGranted}/${perms.totalGranted + perms.totalDenied}</div>
         </div>
       </div>
-      <div style="height: 4px; background: var(--bg-hover, rgba(255,255,255,0.08)); border-radius: 2px; overflow: hidden">
-        <div style="height: 100%; width: ${pct}%; background: ${levelColor}; border-radius: 2px"></div>
+      <div class="ov-perms-bar">
+        <div class="ov-perms-bar-fill" style="width: ${pct}%; background: ${levelColor}"></div>
       </div>
       ${perms.approvedEpochs.length > 0 ? html`
-        <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap">
-          ${perms.approvedEpochs.map((e) => html`<span style="font-size: 11px; padding: 1px 8px; border-radius: 8px; background: rgba(255,255,255,0.06); color: var(--text-muted)">${e}</span>`)}
+        <div class="ov-perms-epochs">
+          ${perms.approvedEpochs.map((e) => html`<span class="ov-perms-epoch">${e}</span>`)}
         </div>
       ` : nothing}
     </div>
