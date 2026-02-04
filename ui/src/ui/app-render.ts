@@ -143,6 +143,7 @@ export function renderApp(state: AppViewState) {
             <span>Health</span>
             <span class="mono">${state.connected ? "OK" : "Offline"}</span>
           </div>
+          ${state.permissionsData?.configured ? html`<span class="topbar-level" title="Autonomy: ${state.permissionsData.levelLabel} · ${state.permissionsData.role}">${state.permissionsData.levelLabel}</span>` : nothing}
           <button
             class="topbar-autorun ${state.permissionsData?.autoRun ? 'topbar-autorun--active' : 'topbar-autorun--idle'}"
             @click=${async () => {
@@ -156,7 +157,9 @@ export function renderApp(state: AppViewState) {
                 await (state as any).loadPermissions?.();
               }
             }}
-            title="${state.permissionsData?.autoRun ? 'KILL SWITCH: Stop all activity' : 'Enable auto-run'}"
+            title="${state.permissionsData?.autoRun
+              ? `KILL SWITCH — Stop all activity\nLevel: ${state.permissionsData?.levelLabel ?? '?'}\nEpochs: ${state.permissionsData?.approvedEpochs?.join(', ') ?? 'none'}`
+              : `Enable auto-run\nLevel: ${state.permissionsData?.levelLabel ?? '?'}\nEpochs: ${state.permissionsData?.approvedEpochs?.join(', ') ?? 'none'}`}"
           ><span class="topbar-autorun__icon">${state.permissionsData?.autoRun ? '🛑' : '▶️'}</span><span class="topbar-autorun__label">${state.permissionsData?.autoRun ? 'STOP' : 'Start'}</span></button>
           <button
             class="topbar-notif"

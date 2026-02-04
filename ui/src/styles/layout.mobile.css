@@ -97,6 +97,12 @@
     display: none;
   }
 
+  /* Level badge: smaller on mobile */
+  .topbar-level {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+
   /* Auto-run button: compact on mobile */
   .topbar-autorun {
     padding: 4px 8px;
@@ -400,6 +406,9 @@
   }
 
   /* On very small screens, hide text labels — just icons */
+  .topbar-level {
+    display: none;
+  }
   .topbar-autorun__label {
     display: none;
   }
