@@ -30,6 +30,7 @@ import { talkHandlers } from "./server-methods/talk.js";
 import { sprintHandlers } from "./server-methods/sprints.js";
 import { taskQueueHandlers } from "./server-methods/task-queue.js";
 import { swarmHandlers } from "./server-methods/swarm.js";
+import { auditHandlers } from "./server-methods/audit.js";
 import { trustHandlers } from "./server-methods/trust.js";
 import { ttsHandlers } from "./server-methods/tts.js";
 import { updateHandlers } from "./server-methods/update.js";
@@ -37,6 +38,7 @@ import { usageHandlers } from "./server-methods/usage.js";
 import { voicewakeHandlers } from "./server-methods/voicewake.js";
 import { webHandlers } from "./server-methods/web.js";
 import { wizardHandlers } from "./server-methods/wizard.js";
+import { workerHealthHandlers } from "./server-methods/worker-health.js";
 
 const ADMIN_SCOPE = "operator.admin";
 const READ_SCOPE = "operator.read";
@@ -84,6 +86,7 @@ const READ_METHODS = new Set([
   "node.list",
   "node.describe",
   "chat.history",
+  "worker.health",
 ]);
 const WRITE_METHODS = new Set([
   "send",
@@ -200,6 +203,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...sprintHandlers,
   ...taskQueueHandlers,
   ...swarmHandlers,
+  ...auditHandlers,
   ...trustHandlers,
   ...metricsHandlers,
   ...issuesHandlers,
@@ -209,6 +213,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...pushHandlers,
   ...activityHandlers,
   ...costsHandlers,
+  ...workerHealthHandlers,
 };
 
 export async function handleGatewayRequest(
