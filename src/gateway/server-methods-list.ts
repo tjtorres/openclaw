@@ -124,6 +124,11 @@ const BASE_METHODS = [
   "costs.compare",
   "costs.calibrate",
   "costs.summary",
+  // Model Router
+  "router.recommend",
+  "router.matrix",
+  "router.classify",
+  "router.history",
   // Push
   "push.vapidPublicKey",
   "push.subscribe",

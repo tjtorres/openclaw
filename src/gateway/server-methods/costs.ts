@@ -10,12 +10,11 @@ import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 
-/** Find the cost estimator script relative to workspace. */
-function findEstimator(): string | null {
-  // Check common locations
+/** Find a workspace script by name. */
+function findScript(name: string): string | null {
   const candidates = [
-    resolve(process.env.HOME || "", ".openclaw/workspace/scripts/cost_estimator.py"),
-    resolve(process.cwd(), "scripts/cost_estimator.py"),
+    resolve(process.env.HOME || "", `.openclaw/workspace/scripts/${name}`),
+    resolve(process.cwd(), `scripts/${name}`),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return c;
@@ -23,11 +22,11 @@ function findEstimator(): string | null {
   return null;
 }
 
-/** Run the cost estimator Python script and return parsed JSON. */
-function runEstimator(args: string[]): unknown {
-  const script = findEstimator();
+/** Run a Python script and return parsed JSON. */
+function runScript(scriptName: string, args: string[]): unknown {
+  const script = findScript(scriptName);
   if (!script) {
-    throw new Error("cost_estimator.py not found in workspace");
+    throw new Error(`${scriptName} not found in workspace`);
   }
   const escaped = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
   const result = execSync(`python3 '${script}' ${escaped}`, {
@@ -36,6 +35,16 @@ function runEstimator(args: string[]): unknown {
     cwd: dirname(script),
   });
   return JSON.parse(result.trim());
+}
+
+/** Shorthand for cost_estimator.py */
+function runEstimator(args: string[]): unknown {
+  return runScript("cost_estimator.py", args);
+}
+
+/** Shorthand for model_router.py */
+function runRouter(args: string[]): unknown {
+  return runScript("model_router.py", args);
 }
 
 export const costsHandlers: GatewayRequestHandlers = {
@@ -138,6 +147,60 @@ export const costsHandlers: GatewayRequestHandlers = {
   "costs.summary": async ({ params, respond }) => {
     try {
       const result = runEstimator(["summary"]);
+      respond(true, result);
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, String(err)));
+    }
+  },
+
+  // ── Model Router ──────────────────────────────────────────────────
+
+  /** Recommend optimal model for a task. */
+  "router.recommend": async ({ params, respond }) => {
+    try {
+      const { description, optimize } = params as {
+        description?: string;
+        optimize?: string;
+      };
+      if (!description) {
+        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "description required"));
+        return;
+      }
+      const args = ["recommend", description];
+      if (optimize) args.push("--optimize", optimize);
+      const result = runRouter(args);
+      respond(true, result);
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, String(err)));
+    }
+  },
+
+  /** Get the full model scoring matrix. */
+  "router.matrix": async ({ params, respond }) => {
+    try {
+      const result = runRouter(["matrix"]);
+      respond(true, result);
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, String(err)));
+    }
+  },
+
+  /** Classify a task description (complexity + type). */
+  "router.classify": async ({ params, respond }) => {
+    try {
+      const { description } = params as { description?: string };
+      const result = runRouter(["classify", description || ""]);
+      respond(true, result);
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, String(err)));
+    }
+  },
+
+  /** Get router recommendation history. */
+  "router.history": async ({ params, respond }) => {
+    try {
+      const { limit } = params as { limit?: number };
+      const result = runRouter(["history", String(limit || 20)]);
       respond(true, result);
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, String(err)));

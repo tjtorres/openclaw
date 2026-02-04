@@ -429,6 +429,7 @@ export function renderApp(state: AppViewState) {
                 costEstimates: state.costEstimates,
                 costComparisons: state.costComparisons,
                 costSummary: state.costSummary,
+                modelRecommendations: state.modelRecommendations,
                 onEstimateCost: (cardId: string, description: string) => state.estimateCardCost(cardId, description),
                 onRefresh: () => state.loadTaskQueue(),
                 onSelectCard: (cardId: string) => state.selectTaskQueueCard(cardId),

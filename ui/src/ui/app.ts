@@ -277,6 +277,7 @@ export class OpenClawApp extends LitElement {
   @state() costEstimates: Map<string, import("./task-queue-types.ts").CostEstimate> = new Map();
   @state() costComparisons: Map<string, import("./task-queue-types.ts").CostComparison> = new Map();
   @state() costSummary: import("./task-queue-types.ts").CostSummary | null = null;
+  @state() modelRecommendations: Map<string, import("./task-queue-types.ts").ModelRecommendation> = new Map();
   @state() activityLoading = false;
   @state() activityData: ActivityFeedData | null = null;
   @state() activityError: string | null = null;

@@ -5,6 +5,7 @@ import type {
   CostEstimate,
   CostComparison,
   CostSummary,
+  ModelRecommendation,
   TaskQueueCard,
   TaskQueueCardDetail,
   TaskQueueList,
@@ -26,6 +27,7 @@ export type TaskQueueProps = {
   costEstimates: Map<string, CostEstimate>;
   costComparisons: Map<string, CostComparison>;
   costSummary: CostSummary | null;
+  modelRecommendations: Map<string, ModelRecommendation>;
   onEstimateCost: (cardId: string, description: string) => void;
   onRefresh: () => void;
   onSelectCard: (cardId: string) => void;
@@ -315,14 +317,51 @@ function renderLiveOutput(
   </div>`;
 }
 
+function renderModelRecommendation(rec: ModelRecommendation | undefined) {
+  if (!rec) return nothing;
+  const tierIcon = (model: string) => {
+    if (model.includes("opus")) return "🟣";
+    if (model.includes("sonnet")) return "🔵";
+    if (model.includes("codex")) return "🟢";
+    if (model.includes("gemini")) return "⚡";
+    return "⚪";
+  };
+  return html`
+    <div class="tq-router-rec">
+      <div class="tq-router-header">
+        <span class="tq-router-label">🤖 Recommended Model</span>
+        <span class="tq-router-type">${rec.task_type} · ${rec.complexity}</span>
+      </div>
+      <div class="tq-router-best">
+        ${tierIcon(rec.recommended)} <strong>${rec.recommended}</strong>
+        <span class="tq-router-score">${rec.recommended_score.toFixed(0)}pts</span>
+      </div>
+      <div class="tq-router-rankings">
+        ${rec.rankings.slice(0, 4).map((r) => html`
+          <div class="tq-router-rank ${r.model === rec.recommended ? 'tq-router-rank-best' : ''}">
+            <span>${tierIcon(r.model)} ${r.model.replace("claude-", "").replace("gpt-5.2-", "").replace("-preview", "")}</span>
+            <span class="tq-router-rank-bar-container">
+              <span class="tq-router-rank-bar" style="width:${r.score}%"></span>
+            </span>
+            <span class="tq-router-rank-score">${r.score.toFixed(0)}</span>
+          </div>
+        `)}
+      </div>
+      <div class="tq-router-reason">${rec.reasoning}</div>
+    </div>
+  `;
+}
+
 function renderCostSection(
   card: TaskQueueCard,
   estimates: Map<string, CostEstimate>,
   comparisons: Map<string, CostComparison>,
+  recommendations: Map<string, ModelRecommendation>,
   onEstimate: (cardId: string, description: string) => void,
 ) {
   const estimate = estimates.get(card.id);
   const comparison = comparisons.get(card.id);
+  const recommendation = recommendations.get(card.id);
 
   if (comparison?.actual_cost_usd != null) {
     // Show completed comparison
@@ -377,6 +416,7 @@ function renderCostSection(
           (${fmtTokens(estimate.estimated_input_tokens)} in / ${fmtTokens(estimate.estimated_output_tokens)} out)
         </div>
       </div>
+      ${renderModelRecommendation(recommendation)}
     </div>`;
   }
 
@@ -479,7 +519,7 @@ function renderCardDetail(props: TaskQueueProps, card: TaskQueueCard, lists: Tas
         }
 
         <!-- Cost Estimate -->
-        ${renderCostSection(card, props.costEstimates, props.costComparisons, props.onEstimateCost)}
+        ${renderCostSection(card, props.costEstimates, props.costComparisons, props.modelRecommendations, props.onEstimateCost)}
 
         <!-- Overall progress -->
         ${
@@ -810,6 +850,44 @@ export function renderTaskQueue(props: TaskQueueProps) {
       .tq-live-ts { font-size: 10px; opacity: 0.35; white-space: nowrap; }
       .tq-live-empty {
         padding: 16px; text-align: center; opacity: 0.4; font-size: 12px;
+      }
+
+      /* Model router */
+      .tq-router-rec {
+        margin-top: 12px; padding-top: 12px;
+        border-top: 1px solid var(--border);
+      }
+      .tq-router-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 6px;
+      }
+      .tq-router-label { font-size: 12px; font-weight: 600; }
+      .tq-router-type { font-size: 11px; opacity: 0.4; }
+      .tq-router-best {
+        font-size: 14px; margin-bottom: 8px;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .tq-router-score {
+        font-size: 11px; opacity: 0.5; background: var(--bg-muted);
+        padding: 1px 6px; border-radius: 3px;
+      }
+      .tq-router-rankings { display: flex; flex-direction: column; gap: 4px; }
+      .tq-router-rank {
+        display: grid; grid-template-columns: 100px 1fr 30px;
+        gap: 8px; align-items: center; font-size: 11px; opacity: 0.6;
+      }
+      .tq-router-rank-best { opacity: 1; font-weight: 600; }
+      .tq-router-rank-bar-container {
+        height: 5px; background: var(--border); border-radius: 3px; overflow: hidden;
+      }
+      .tq-router-rank-bar {
+        height: 100%; background: #58a6ff; border-radius: 3px;
+        transition: width 0.3s ease;
+      }
+      .tq-router-rank-best .tq-router-rank-bar { background: #238636; }
+      .tq-router-rank-score { text-align: right; }
+      .tq-router-reason {
+        font-size: 11px; opacity: 0.4; margin-top: 6px; font-style: italic;
       }
 
       /* Cost badges */

@@ -1,5 +1,5 @@
 import type { GatewayBrowserClient } from "../gateway.ts";
-import type { CardMetrics, CostEstimate, CostComparison, CostSummary, TaskQueueCardDetail, TaskQueueSnapshot } from "../task-queue-types.ts";
+import type { CardMetrics, CostEstimate, CostComparison, CostSummary, ModelRecommendation, TaskQueueCardDetail, TaskQueueSnapshot } from "../task-queue-types.ts";
 
 export type TaskQueueState = {
   client: GatewayBrowserClient | null;
@@ -15,6 +15,7 @@ export type TaskQueueState = {
   costEstimates: Map<string, CostEstimate>;
   costComparisons: Map<string, CostComparison>;
   costSummary: CostSummary | null;
+  modelRecommendations: Map<string, ModelRecommendation>;
 };
 
 export async function loadTaskQueue(state: TaskQueueState) {
@@ -123,12 +124,17 @@ export async function toggleCheckItem(
   }
 }
 
-/** Estimate cost for a card and cache result. */
+/** Estimate cost for a card and cache result. Also fetches model recommendation. */
 export async function estimateCost(state: TaskQueueState, cardId: string, description: string) {
   if (!state.client || !state.connected) return;
   try {
-    const est = await state.client.request<CostEstimate>("costs.estimate", { description });
+    // Fetch cost estimate and model recommendation in parallel
+    const [est, rec] = await Promise.all([
+      state.client.request<CostEstimate>("costs.estimate", { description }),
+      state.client.request<ModelRecommendation>("router.recommend", { description }).catch(() => null),
+    ]);
     state.costEstimates.set(cardId, est);
+    if (rec) state.modelRecommendations.set(cardId, rec);
     // Also save estimate to DB
     const card = state.taskQueueSnapshot?.cards.find((c) => c.id === cardId);
     if (card) {

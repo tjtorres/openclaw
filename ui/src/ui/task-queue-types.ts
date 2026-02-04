@@ -112,6 +112,25 @@ export type CostSummary = {
   }>;
 };
 
+export type ModelRecommendation = {
+  description: string;
+  complexity: string;
+  task_type: string;
+  optimize: string;
+  recommended: string;
+  recommended_score: number;
+  rankings: Array<{
+    model: string;
+    score: number;
+    quality: number;
+    speed: number;
+    cost_score: number;
+    reasoning: number;
+    cost_per_1k_tokens: number;
+  }>;
+  reasoning: string;
+};
+
 export type CardMetricsModelBreakdown = {
   model: string;
   events: number;
