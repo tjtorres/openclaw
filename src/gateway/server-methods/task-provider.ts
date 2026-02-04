@@ -146,38 +146,40 @@ export interface TaskProvider {
 
 // ── Provider factory ─────────────────────────────────────────
 
+import { TrelloProvider } from "./providers/trello.js";
+import { GitHubProvider } from "./providers/github.js";
+import { LocalProvider } from "./providers/local.js";
+
 let _activeProvider: TaskProvider | null = null;
 
 /**
  * Get the active task provider.
- * Detected from config: if Trello config exists → TrelloProvider.
- * Otherwise → LocalProvider.
+ * Detected from config: Trello → GitHub → local (fallback).
  *
  * Provider is cached for the gateway lifetime. Call resetProvider() to re-detect.
  */
 export function getProvider(): TaskProvider {
   if (_activeProvider) return _activeProvider;
 
-  // Try providers in order: Trello → GitHub → local
-  const providers: Array<{ name: string; mod: string; cls: string }> = [
-    { name: "Trello", mod: "./providers/trello.js", cls: "TrelloProvider" },
-    { name: "GitHub", mod: "./providers/github.js", cls: "GitHubProvider" },
+  // Try providers in priority order
+  const candidates: Array<{ name: string; provider: TaskProvider }> = [
+    { name: "Trello", provider: new TrelloProvider() },
+    { name: "GitHub", provider: new GitHubProvider() },
   ];
 
-  for (const p of providers) {
+  for (const { name, provider } of candidates) {
     try {
-      const mod = require(p.mod);
-      const provider = new mod[p.cls]();
       if (provider.isConfigured()) {
         _activeProvider = provider;
-        console.log(`[task-provider] Using ${p.name} provider`);
+        console.log(`[task-provider] Using ${name} provider`);
         return _activeProvider;
       }
-    } catch {}
+    } catch (err) {
+      console.log(`[task-provider] ${name} provider check failed:`, err);
+    }
   }
 
   // Fallback: local-only
-  const { LocalProvider } = require("./providers/local.js");
   _activeProvider = new LocalProvider();
   console.log("[task-provider] Using local-only provider (no external service)");
   return _activeProvider;
