@@ -158,16 +158,23 @@ let _activeProvider: TaskProvider | null = null;
 export function getProvider(): TaskProvider {
   if (_activeProvider) return _activeProvider;
 
-  // Try Trello first
-  try {
-    const { TrelloProvider } = require("./providers/trello.js");
-    const provider = new TrelloProvider();
-    if (provider.isConfigured()) {
-      _activeProvider = provider;
-      console.log("[task-provider] Using Trello provider");
-      return _activeProvider;
-    }
-  } catch {}
+  // Try providers in order: Trello → GitHub → local
+  const providers: Array<{ name: string; mod: string; cls: string }> = [
+    { name: "Trello", mod: "./providers/trello.js", cls: "TrelloProvider" },
+    { name: "GitHub", mod: "./providers/github.js", cls: "GitHubProvider" },
+  ];
+
+  for (const p of providers) {
+    try {
+      const mod = require(p.mod);
+      const provider = new mod[p.cls]();
+      if (provider.isConfigured()) {
+        _activeProvider = provider;
+        console.log(`[task-provider] Using ${p.name} provider`);
+        return _activeProvider;
+      }
+    } catch {}
+  }
 
   // Fallback: local-only
   const { LocalProvider } = require("./providers/local.js");
