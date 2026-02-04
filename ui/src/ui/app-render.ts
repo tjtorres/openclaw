@@ -487,6 +487,7 @@ export function renderApp(state: AppViewState) {
                 onSelectModel: (model) => state.selectMetricsModel(model),
                 onSelectDay: (day) => state.selectMetricsDay(day),
                 onCloseDetail: () => state.closeMetricsDetail(),
+                epochCosts: (state as any).epochCosts ?? null,
                 onNavigateSession: (sessionKey) => {
                   state.sessionKey = sessionKey;
                   state.applySettings({

@@ -304,6 +304,7 @@ export class OpenClawApp extends LitElement {
   @state() metricsModelDetailLoading = false;
   @state() metricsSelectedDay: string | null = null;
   @state() metricsDayDetail: DayDetailData | null = null;
+  @state() epochCosts: import("./views/metrics.ts").EpochCostData | null = null;
   @state() metricsDayDetailLoading = false;
   @state() sprintsLoading = false;
   @state() sprintsData: SprintsListData | null = null;
@@ -757,6 +758,10 @@ export class OpenClawApp extends LitElement {
       if (this.metricsDays) params.days = this.metricsDays;
       const res = await this.client.request<MetricsData>("metrics.overview", params);
       this.metricsData = res;
+      // Also load epoch costs (non-blocking)
+      this.client.request<import("./views/metrics.ts").EpochCostData>("costs.epochs", {})
+        .then((r) => { this.epochCosts = r; })
+        .catch(() => {});
     } catch (err) {
       this.metricsError = String(err);
     } finally {

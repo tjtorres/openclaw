@@ -196,6 +196,33 @@ export const costsHandlers: GatewayRequestHandlers = {
     }
   },
 
+  // ── Epoch Costs ────────────────────────────────────────────────────
+
+  /** Get cost breakdown grouped by epoch. */
+  "costs.epochs": async ({ params, respond }) => {
+    try {
+      const result = runScript("epoch_costs.py", ["summary"]);
+      respond(true, result);
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, String(err)));
+    }
+  },
+
+  /** Get cost detail for a specific epoch. */
+  "costs.epochDetail": async ({ params, respond }) => {
+    try {
+      const { epoch } = params as { epoch?: string };
+      if (!epoch) {
+        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "epoch required"));
+        return;
+      }
+      const result = runScript("epoch_costs.py", ["epoch", epoch]);
+      respond(true, result);
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, String(err)));
+    }
+  },
+
   /** Get router recommendation history. */
   "router.history": async ({ params, respond }) => {
     try {

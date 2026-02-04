@@ -72,6 +72,31 @@ export type MetricsProps = {
   onSelectDay: (day: string) => void;
   onCloseDetail: () => void;
   onNavigateSession: (sessionKey: string) => void;
+  epochCosts: EpochCostData | null;
+};
+
+export type EpochCostEntry = {
+  epoch: string;
+  color: string;
+  count: number;
+  completed: number;
+  estimated_total: number;
+  actual_total: number;
+  cards: Array<{
+    card_id: string;
+    name: string;
+    complexity: string;
+    estimated: number;
+    actual: number;
+    status: string;
+  }>;
+};
+
+export type EpochCostData = {
+  epochs: EpochCostEntry[];
+  total_estimated: number;
+  total_actual: number;
+  total_cards: number;
 };
 
 function formatCost(n: number): string {
@@ -394,6 +419,26 @@ export function renderMetrics(props: MetricsProps) {
       .m-session-row:hover { background: var(--bg-hover, rgba(255,255,255,0.03)); }
       .m-session-key { font-size: 12px; overflow: hidden; text-overflow: ellipsis; opacity: 0.8; }
 
+      /* Epoch costs */
+      .m-epoch-grid { display: flex; flex-direction: column; gap: 6px; }
+      .m-epoch-row {
+        display: grid; grid-template-columns: 10px 100px 1fr 70px 60px;
+        align-items: center; gap: 8px; font-size: 12px;
+      }
+      .m-epoch-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+      .m-epoch-name { font-weight: 500; text-transform: capitalize; }
+      .m-epoch-bar-wrap {
+        height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;
+      }
+      .m-epoch-bar { height: 100%; border-radius: 4px; transition: width 0.3s; }
+      .m-epoch-cost { text-align: right; font-weight: 600; }
+      .m-epoch-count { text-align: right; opacity: 0.4; font-size: 11px; }
+
+      @media (max-width: 600px) {
+        .m-epoch-row { grid-template-columns: 8px 80px 1fr 60px; }
+        .m-epoch-count { display: none; }
+      }
+
       .m-refresh-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
       .m-sparkline-wrap { display: flex; align-items: center; gap: 12px; }
 
@@ -563,6 +608,38 @@ export function renderMetrics(props: MetricsProps) {
         </div>`
         : nothing
     }
+
+    <!-- Epoch cost breakdown -->
+    ${props.epochCosts && props.epochCosts.epochs.length > 0 ? html`
+      <div class="m-section">
+        <div class="m-section-header">
+          <div class="m-section-title">Cost by Epoch</div>
+          <div style="font-size:11px;opacity:0.4">${props.epochCosts.total_cards} tracked cards</div>
+        </div>
+        <div class="m-epoch-grid">
+          ${props.epochCosts.epochs.map((e) => {
+            const total = e.actual_total || e.estimated_total;
+            const maxCost = Math.max(...props.epochCosts!.epochs.map((x) => x.actual_total || x.estimated_total), 1);
+            const barPct = Math.round((total / maxCost) * 100);
+            return html`
+              <div class="m-epoch-row">
+                <span class="m-epoch-dot" style="background:${e.color}"></span>
+                <span class="m-epoch-name">${e.epoch}</span>
+                <span class="m-epoch-bar-wrap">
+                  <span class="m-epoch-bar" style="width:${barPct}%;background:${e.color}"></span>
+                </span>
+                <span class="m-epoch-cost">${formatCost(total)}</span>
+                <span class="m-epoch-count">${e.count} cards</span>
+              </div>
+            `;
+          })}
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;opacity:0.4">
+          <span>Total estimated: ${formatCost(props.epochCosts.total_estimated)}</span>
+          <span>Total actual: ${formatCost(props.epochCosts.total_actual)}</span>
+        </div>
+      </div>
+    ` : nothing}
 
     <div class="m-refresh-bar">
       <button class="btn" ?disabled=${props.loading} @click=${props.onRefresh}>

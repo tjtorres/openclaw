@@ -125,6 +125,8 @@ const BASE_METHODS = [
   "costs.compare",
   "costs.calibrate",
   "costs.summary",
+  "costs.epochs",
+  "costs.epochDetail",
   // Model Router
   "router.recommend",
   "router.matrix",
