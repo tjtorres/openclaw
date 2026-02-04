@@ -909,8 +909,41 @@ export function renderTaskQueue(props: TaskQueueProps) {
       .tq-cost-tokens { font-size: 11px; opacity: 0.4; margin-top: 4px; }
 
       @media (max-width: 600px) {
-        .tq-metrics-grid { grid-template-columns: repeat(2, 1fr); }
-        .tq-model-name { width: 100px; }
+        .tq-overlay {
+          padding-top: 0;
+          align-items: stretch;
+        }
+        .tq-panel {
+          width: 100%; max-width: 100%; max-height: 100vh;
+          border-radius: 0; border: none;
+          -webkit-overflow-scrolling: touch;
+        }
+        .tq-panel-header { padding: 14px 14px 8px; }
+        .tq-panel-title { font-size: 16px; }
+        .tq-actions {
+          padding: 0 14px 10px;
+          flex-wrap: wrap; gap: 6px;
+        }
+        .tq-section { padding: 10px 14px; }
+        .tq-close {
+          font-size: 24px; padding: 8px 12px;
+          position: sticky; top: 0;
+        }
+        .tq-metrics-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .tq-metric-card { padding: 8px 6px; }
+        .tq-metric-value { font-size: 15px; }
+        .tq-model-name { width: 80px; font-size: 11px; }
+        .tq-board { gap: 6px; }
+        .tq-column { min-width: 180px; max-width: 220px; }
+        .tq-card { padding: 8px 10px; }
+        .tq-card-title { font-size: 12px; }
+        .tq-cost-amount { font-size: 16px; }
+        .tq-router-rank { grid-template-columns: 80px 1fr 25px; font-size: 10px; }
+      }
+      @media (max-width: 400px) {
+        .tq-metrics-grid { grid-template-columns: 1fr 1fr; }
+        .tq-stat-num { font-size: 20px; }
+        .tq-column { min-width: 160px; }
       }
     </style>
 
