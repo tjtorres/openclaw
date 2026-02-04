@@ -40,6 +40,34 @@ function loadConfig(): PermissionsConfig | null {
 import { writeFileSync } from "node:fs";
 
 export const permissionsHandlers: GatewayRequestHandlers = {
+  "permissions.killSwitch": ({ respond }) => {
+    const config = loadConfig();
+    if (!config) {
+      respond(false, undefined, { code: -1, message: "Not configured" });
+      return;
+    }
+    // Disable auto-run
+    config.autonomy.autoRun = false;
+    try {
+      const p = join(workspacePath(), "permissions.json");
+      writeFileSync(p, JSON.stringify(config, null, 2) + "\n");
+
+      // Kill active swarm workers
+      const { execSync } = require("node:child_process");
+      try {
+        execSync("pkill -f 'swarm/' || true", { timeout: 5000, stdio: "ignore" });
+      } catch {}
+
+      // Write kill marker for heartbeat to see
+      writeFileSync(join(workspacePath(), ".kill-switch"), new Date().toISOString());
+
+      respond(true, { killed: true, autoRun: false, message: "All activity stopped. Auto-run disabled." });
+    } catch (err) {
+      respond(false, undefined, { code: -1, message: String(err) });
+    }
+  },
+
+
   "permissions.toggleAutoRun": ({ params, respond }) => {
     const config = loadConfig();
     if (!config) {
@@ -51,6 +79,11 @@ export const permissionsHandlers: GatewayRequestHandlers = {
     try {
       const p = join(workspacePath(), "permissions.json");
       writeFileSync(p, JSON.stringify(config, null, 2) + "\n");
+      // Clear kill switch if re-enabling
+      if (config.autonomy.autoRun) {
+        const killPath = join(workspacePath(), ".kill-switch");
+        try { require("node:fs").unlinkSync(killPath); } catch {}
+      }
       respond(true, { autoRun: config.autonomy.autoRun });
     } catch (err) {
       respond(false, undefined, { code: -1, message: String(err) });

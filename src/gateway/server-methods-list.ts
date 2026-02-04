@@ -113,6 +113,7 @@ const BASE_METHODS = [
   // Permissions
   "permissions.summary",
   "permissions.toggleAutoRun",
+  "permissions.killSwitch",
   // Swarm
   "swarm.status",
   // Push

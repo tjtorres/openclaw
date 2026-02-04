@@ -144,6 +144,21 @@ export function renderApp(state: AppViewState) {
             <span class="mono">${state.connected ? "OK" : "Offline"}</span>
           </div>
           <button
+            style="cursor: pointer; border: none; background: ${state.permissionsData?.autoRun ? '#e53935' : 'var(--bg-hover)'}; color: ${state.permissionsData?.autoRun ? 'white' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; transition: all 0.15s; ${state.permissionsData?.autoRun ? 'box-shadow: 0 0 8px rgba(229,57,53,0.3);' : ''}"
+            @click=${async () => {
+              if (state.permissionsData?.autoRun) {
+                if (confirm('Kill switch: Stop ALL activity and disable auto-run?')) {
+                  await (state as any).client?.request('permissions.killSwitch', {});
+                  await (state as any).loadPermissions?.();
+                }
+              } else {
+                await (state as any).client?.request('permissions.toggleAutoRun', { enabled: true });
+                await (state as any).loadPermissions?.();
+              }
+            }}
+            title="${state.permissionsData?.autoRun ? 'KILL SWITCH: Stop all activity' : 'Enable auto-run'}"
+          >${state.permissionsData?.autoRun ? '🛑 STOP' : '▶️ Start'}</button>
+          <button
             class="pill"
             style="cursor: pointer; position: relative; border: none; background: var(--bg-hover); padding: 4px 10px"
             @click=${() => {
