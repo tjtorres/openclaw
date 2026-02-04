@@ -108,6 +108,8 @@ const BASE_METHODS = [
   "issues.list",
   // Notifications
   "notifications.list",
+  "notifications.dismiss",
+  "notifications.dismissAll",
   // Push
   "push.vapidPublicKey",
   "push.subscribe",

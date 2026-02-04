@@ -43,7 +43,31 @@ function extractSummary(desc: string | null, maxLen = 180): string {
   return first.length > maxLen ? first.slice(0, maxLen) + "…" : first;
 }
 
+/** Track which notification IDs have been dismissed/seen. In-memory is fine — resets on gateway restart. */
+const seenNotifications = new Set<string>();
+
 export const notificationsHandlers: GatewayRequestHandlers = {
+  "notifications.dismiss": ({ params, respond }) => {
+    const { notificationId } = params as { notificationId?: string };
+    if (notificationId) {
+      seenNotifications.add(notificationId);
+    }
+    respond(true, { ok: true });
+  },
+
+  "notifications.dismissAll": ({ respond }) => {
+    seenNotifications.clear();
+    // Mark everything currently known as seen
+    const db = getTasksDb();
+    if (db) {
+      const proposed = db.prepare("SELECT id FROM cards c JOIN lists l ON c.list_id=l.id WHERE l.name='Proposed'").all() as Array<{ id: string }>;
+      const blocked = db.prepare("SELECT id FROM cards c JOIN lists l ON c.list_id=l.id WHERE l.name='Blocked'").all() as Array<{ id: string }>;
+      for (const c of proposed) seenNotifications.add(`proposal-${c.id}`);
+      for (const c of blocked) seenNotifications.add(`blocked-${c.id}`);
+    }
+    respond(true, { ok: true });
+  },
+
   "notifications.list": ({ respond }) => {
     const db = getTasksDb();
     const notifications: Notification[] = [];
@@ -65,8 +89,9 @@ export const notificationsHandlers: GatewayRequestHandlers = {
       const progress = getChecklistProgress(db, card.id);
       const summary = extractSummary(card.description) || "New task proposal — review and approve to start work.";
 
+      const notifId = `proposal-${card.id}`;
       notifications.push({
-        id: `proposal-${card.id}`,
+        id: notifId,
         type: "proposal",
         title: card.name,
         summary: `🟡 Approval needed — ${summary}`,
@@ -95,7 +120,7 @@ export const notificationsHandlers: GatewayRequestHandlers = {
           },
         ],
         createdAt: card.updated_at || new Date().toISOString(),
-        read: false,
+        read: seenNotifications.has(notifId),
       });
     }
 
@@ -111,8 +136,9 @@ export const notificationsHandlers: GatewayRequestHandlers = {
       const summary = extractSummary(card.description) || "This task is blocked and needs your input to proceed.";
       const progress = getChecklistProgress(db, card.id);
 
+      const blockedNotifId = `blocked-${card.id}`;
       notifications.push({
-        id: `blocked-${card.id}`,
+        id: blockedNotifId,
         type: "blocked",
         title: card.name,
         summary: `🔴 Blocked — ${summary}`,
@@ -135,7 +161,7 @@ export const notificationsHandlers: GatewayRequestHandlers = {
           },
         ],
         createdAt: card.updated_at || new Date().toISOString(),
-        read: false,
+        read: seenNotifications.has(blockedNotifId),
       });
     }
 

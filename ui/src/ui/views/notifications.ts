@@ -45,12 +45,27 @@ export type NotificationsProps = {
   onRefresh: () => void;
 };
 
+/** Strip markdown formatting for clean plaintext display. */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")          // headers
+    .replace(/\*\*(.+?)\*\*/g, "$1")       // bold
+    .replace(/\*(.+?)\*/g, "$1")           // italic
+    .replace(/`(.+?)`/g, "$1")             // inline code
+    .replace(/^[-*]\s+/gm, "• ")           // list items
+    .replace(/^\d+\.\s+/gm, "")            // numbered lists
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links
+    .replace(/---+/g, "")                  // hr
+    .replace(/\n{2,}/g, "\n")              // collapse whitespace
+    .trim();
+}
+
 const typeBadge: Record<string, { label: string; bg: string; fg: string }> = {
-  proposal:      { label: "Approval Needed", bg: "#fff3cd", fg: "#856404" },
-  blocked:       { label: "Blocked",         bg: "#f8d7da", fg: "#721c24" },
-  alert:         { label: "Alert",           bg: "#f8d7da", fg: "#721c24" },
-  "in-progress": { label: "In Progress",     bg: "#cce5ff", fg: "#004085" },
-  completed:     { label: "Done",            bg: "#d4edda", fg: "#155724" },
+  proposal:      { label: "Approval Needed", bg: "rgba(255, 193, 7, 0.2)", fg: "#ffc107" },
+  blocked:       { label: "Blocked",         bg: "rgba(229, 57, 53, 0.2)", fg: "#ef5350" },
+  alert:         { label: "Alert",           bg: "rgba(229, 57, 53, 0.2)", fg: "#ef5350" },
+  "in-progress": { label: "In Progress",     bg: "rgba(66, 165, 245, 0.2)", fg: "#42a5f5" },
+  completed:     { label: "Done",            bg: "rgba(76, 175, 80, 0.2)", fg: "#66bb6a" },
 };
 
 export function renderNotifications(props: NotificationsProps) {
@@ -170,7 +185,10 @@ export function renderNotifications(props: NotificationsProps) {
           ? html`<span style="background:#e53935;color:white;padding:4px 14px;border-radius:16px;font-size:14px;font-weight:700">${unreadCount} need${unreadCount === 1 ? "s" : ""} attention</span>`
           : html`<span style="background:#43a047;color:white;padding:4px 14px;border-radius:16px;font-size:14px;font-weight:600">✓ All clear</span>`}
       </div>
-      <button class="notif-btn notif-btn--default" @click=${() => props.onRefresh()} style="font-size:12px">↻ Refresh</button>
+      <div style="display:flex;gap:8px">
+        ${unreadCount > 0 ? html`<button class="notif-btn notif-btn--default" @click=${() => props.onAction("dismissAll", {})} style="font-size:12px">Mark all read</button>` : nothing}
+        <button class="notif-btn notif-btn--default" @click=${() => props.onRefresh()} style="font-size:12px">↻ Refresh</button>
+      </div>
     </div>
 
     ${actionable.length > 0 ? html`
@@ -233,7 +251,7 @@ function renderNotifCard(
       ` : nothing}
 
       ${n.description && n.type !== "completed" ? html`
-        <div class="notif-desc">${n.description.slice(0, 300)}${n.description.length > 300 ? "…" : ""}</div>
+        <div class="notif-desc">${stripMarkdown(n.description).slice(0, 300)}${n.description.length > 300 ? "…" : ""}</div>
       ` : nothing}
 
       ${n.actions.length > 0 ? html`

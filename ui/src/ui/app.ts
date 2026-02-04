@@ -668,10 +668,31 @@ export class OpenClawApp extends LitElement {
       }
       return;
     }
+    if (action === "dismiss" && params.notificationId) {
+      if (this.client && this.connected) {
+        await this.client.request("notifications.dismiss", { notificationId: params.notificationId });
+        void this.loadNotifications();
+      }
+      return;
+    }
+    if (action === "dismissAll") {
+      if (this.client && this.connected) {
+        await this.client.request("notifications.dismissAll", {});
+        void this.loadNotifications();
+      }
+      return;
+    }
     // Execute RPC action (e.g., taskQueue.approveCard)
     if (this.client && this.connected) {
       try {
         await this.client.request(action, params);
+        // Auto-dismiss the notification after action
+        if (params.cardId) {
+          // Dismiss all notification IDs for this card
+          for (const prefix of ["proposal-", "blocked-"]) {
+            await this.client.request("notifications.dismiss", { notificationId: `${prefix}${params.cardId}` }).catch(() => {});
+          }
+        }
         // Refresh notifications after action
         void this.loadNotifications();
         // Also refresh task queue if it was an approval
