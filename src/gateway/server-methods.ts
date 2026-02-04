@@ -1,6 +1,7 @@
 import type { GatewayRequestHandlers, GatewayRequestOptions } from "./server-methods/types.js";
 import { ErrorCodes, errorShape } from "./protocol/index.js";
 import { activityHandlers } from "./server-methods/activity.js";
+import { costsHandlers } from "./server-methods/costs.js";
 import { agentHandlers } from "./server-methods/agent.js";
 import { agentsHandlers } from "./server-methods/agents.js";
 import { browserHandlers } from "./server-methods/browser.js";
@@ -203,6 +204,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...swarmStatusHandlers,
   ...pushHandlers,
   ...activityHandlers,
+  ...costsHandlers,
 };
 
 export async function handleGatewayRequest(

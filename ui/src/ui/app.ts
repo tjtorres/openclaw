@@ -104,6 +104,9 @@ import {
   approveCard as approveCardInternal,
   addComment as addCommentInternal,
   toggleCheckItem as toggleCheckItemInternal,
+  estimateCost as estimateCostInternal,
+  loadCostEstimates as loadCostEstimatesInternal,
+  loadCostSummary as loadCostSummaryInternal,
 } from "./controllers/task-queue.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
 import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types.ts";
@@ -271,6 +274,9 @@ export class OpenClawApp extends LitElement {
   @state() taskQueueCardDetailLoading = false;
   @state() taskQueueCardMetrics: CardMetrics | null = null;
   @state() taskQueueCardMetricsLoading = false;
+  @state() costEstimates: Map<string, import("./task-queue-types.ts").CostEstimate> = new Map();
+  @state() costComparisons: Map<string, import("./task-queue-types.ts").CostComparison> = new Map();
+  @state() costSummary: import("./task-queue-types.ts").CostSummary | null = null;
   @state() activityLoading = false;
   @state() activityData: ActivityFeedData | null = null;
   @state() activityError: string | null = null;
@@ -479,6 +485,13 @@ export class OpenClawApp extends LitElement {
 
   async loadTaskQueue() {
     await loadTaskQueueInternal(this as unknown as Parameters<typeof loadTaskQueueInternal>[0]);
+    // Load cost estimates for visible cards (non-blocking)
+    loadCostEstimatesInternal(this as unknown as Parameters<typeof loadCostEstimatesInternal>[0]).catch(() => {});
+    loadCostSummaryInternal(this as unknown as Parameters<typeof loadCostSummaryInternal>[0]).catch(() => {});
+  }
+  async estimateCardCost(cardId: string, description: string) {
+    await estimateCostInternal(this as unknown as Parameters<typeof estimateCostInternal>[0], cardId, description);
+    this.requestUpdate();
   }
   async selectTaskQueueCard(cardId: string) {
     await loadCardDetailInternal(

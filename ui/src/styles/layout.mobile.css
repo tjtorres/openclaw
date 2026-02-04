@@ -75,23 +75,60 @@
   }
 
   .topbar-status {
-    gap: 6px;
+    gap: 4px;
     width: auto;
     flex-wrap: nowrap;
+    flex-shrink: 0;
   }
 
   .topbar-status .pill {
     padding: 4px 8px;
     font-size: 11px;
     gap: 4px;
+    height: 28px;
   }
 
+  /* Hide "Health" and "OK" text on mobile — just show the dot */
   .topbar-status .pill .mono {
     display: none;
   }
 
   .topbar-status .pill span:nth-child(2) {
     display: none;
+  }
+
+  /* Auto-run button: compact on mobile */
+  .topbar-autorun {
+    padding: 4px 8px;
+    height: 28px;
+    font-size: 11px;
+    gap: 3px;
+  }
+
+  .topbar-autorun__icon {
+    font-size: 12px;
+  }
+
+  .topbar-autorun__label {
+    font-size: 11px;
+  }
+
+  /* Notification bell: compact */
+  .topbar-notif {
+    padding: 4px 8px;
+    height: 28px;
+  }
+
+  .topbar-notif__icon {
+    font-size: 12px;
+  }
+
+  .topbar-notif__badge {
+    top: -3px;
+    right: -3px;
+    font-size: 9px;
+    min-width: 14px;
+    height: 14px;
   }
 
   /* Nav */
@@ -359,6 +396,30 @@
   .topbar-status .pill {
     padding: 3px 6px;
     font-size: 10px;
+    height: 24px;
+  }
+
+  /* On very small screens, hide text labels — just icons */
+  .topbar-autorun__label {
+    display: none;
+  }
+
+  .topbar-autorun {
+    padding: 3px 8px;
+    height: 24px;
+  }
+
+  .topbar-autorun__icon {
+    font-size: 14px;
+  }
+
+  .topbar-notif {
+    padding: 3px 8px;
+    height: 24px;
+  }
+
+  .topbar-notif__icon {
+    font-size: 13px;
   }
 
   .theme-toggle {

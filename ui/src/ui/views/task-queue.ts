@@ -2,6 +2,9 @@ import { html, nothing } from "lit";
 import { formatTime as fmtTime, timeAgo as relTime, formatDateTime, tzAbbrev } from "../time-format.js";
 import type {
   CardMetrics,
+  CostEstimate,
+  CostComparison,
+  CostSummary,
   TaskQueueCard,
   TaskQueueCardDetail,
   TaskQueueList,
@@ -20,6 +23,10 @@ export type TaskQueueProps = {
   cardMetricsLoading: boolean;
   activityData: ActivityFeedData | null;
   agentStatus: "idle" | "working";
+  costEstimates: Map<string, CostEstimate>;
+  costComparisons: Map<string, CostComparison>;
+  costSummary: CostSummary | null;
+  onEstimateCost: (cardId: string, description: string) => void;
   onRefresh: () => void;
   onSelectCard: (cardId: string) => void;
   onCloseDetail: () => void;
@@ -84,7 +91,26 @@ function renderProgressBar(checked: number, total: number) {
   `;
 }
 
-function renderCard(card: TaskQueueCard, isSelected: boolean, onSelect: (id: string) => void) {
+function renderCostBadge(estimate: CostEstimate | undefined, comparison: CostComparison | undefined) {
+  if (comparison?.actual_cost_usd != null && comparison.estimated_cost_usd != null) {
+    // Show actual vs estimated
+    const ratio = comparison.accuracy_ratio ?? 1;
+    const color = ratio <= 1.1 ? "#238636" : ratio <= 1.5 ? "#d29922" : "#da3633";
+    const icon = ratio <= 1.1 ? "✅" : ratio <= 1.5 ? "⚠️" : "🔴";
+    return html`<span class="tq-cost-badge" style="border-color:${color}" title="Actual: $${comparison.actual_cost_usd.toFixed(2)} vs Est: $${comparison.estimated_cost_usd.toFixed(2)}">
+      ${icon} $${comparison.actual_cost_usd.toFixed(2)}
+    </span>`;
+  }
+  if (estimate) {
+    const confColor = estimate.confidence === "high" ? "#238636" : estimate.confidence === "medium" ? "#d29922" : "#6e7681";
+    return html`<span class="tq-cost-badge tq-cost-estimate" style="border-color:${confColor}" title="${estimate.complexity} · ${estimate.confidence} confidence · $${estimate.range.low.toFixed(2)}-$${estimate.range.high.toFixed(2)}">
+      💰 ~$${estimate.estimated_cost_usd.toFixed(2)}
+    </span>`;
+  }
+  return nothing;
+}
+
+function renderCard(card: TaskQueueCard, isSelected: boolean, onSelect: (id: string) => void, costEstimate?: CostEstimate, costComparison?: CostComparison) {
   const hasProgress = card.checkItems > 0;
   return html`
     <div class="tq-card ${isSelected ? "tq-card-selected" : ""}" @click=${() => onSelect(card.id)}>
@@ -92,6 +118,7 @@ function renderCard(card: TaskQueueCard, isSelected: boolean, onSelect: (id: str
       ${hasProgress ? renderProgressBar(card.checkItemsChecked, card.checkItems) : nothing}
       <div class="tq-card-footer">
         <div class="tq-card-badges">
+          ${renderCostBadge(costEstimate, costComparison)}
           ${
             card.commentCount > 0
               ? html`<span class="tq-badge" title="${card.commentCount} comments">💬 ${card.commentCount}</span>`
@@ -125,6 +152,8 @@ function renderColumn(
   cards: TaskQueueCard[],
   selectedCardId: string | null,
   onSelect: (id: string) => void,
+  costEstimates?: Map<string, CostEstimate>,
+  costComparisons?: Map<string, CostComparison>,
 ) {
   const isDone = name === "Done";
   const display = isDone ? cards.slice(0, 5) : cards;
@@ -142,7 +171,7 @@ function renderColumn(
             ? html`
                 <div class="tq-empty">No cards</div>
               `
-            : display.map((c) => renderCard(c, c.id === selectedCardId, onSelect))
+            : display.map((c) => renderCard(c, c.id === selectedCardId, onSelect, costEstimates?.get(c.id), costComparisons?.get(c.id)))
         }
         ${
           hidden > 0
@@ -286,6 +315,80 @@ function renderLiveOutput(
   </div>`;
 }
 
+function renderCostSection(
+  card: TaskQueueCard,
+  estimates: Map<string, CostEstimate>,
+  comparisons: Map<string, CostComparison>,
+  onEstimate: (cardId: string, description: string) => void,
+) {
+  const estimate = estimates.get(card.id);
+  const comparison = comparisons.get(card.id);
+
+  if (comparison?.actual_cost_usd != null) {
+    // Show completed comparison
+    const ratio = comparison.accuracy_ratio ?? 1;
+    const accColor = ratio <= 1.1 ? "#238636" : ratio <= 1.5 ? "#d29922" : "#da3633";
+    return html`<div class="tq-section">
+      <div class="tq-section-title">💰 Cost Tracking</div>
+      <div class="tq-cost-compare">
+        <div class="tq-cost-row">
+          <span class="tq-cost-label">Estimated</span>
+          <span class="tq-cost-value">$${comparison.estimated_cost_usd.toFixed(2)}</span>
+        </div>
+        <div class="tq-cost-row">
+          <span class="tq-cost-label">Actual</span>
+          <span class="tq-cost-value" style="color:${accColor}">$${comparison.actual_cost_usd.toFixed(2)}</span>
+        </div>
+        <div class="tq-cost-row">
+          <span class="tq-cost-label">Accuracy</span>
+          <span class="tq-cost-value" style="color:${accColor}">
+            ${comparison.accuracy_pct?.toFixed(0)}%
+            ${comparison.over_under === "over" ? "↑ over" : "↓ under"}
+          </span>
+        </div>
+        <div class="tq-cost-row">
+          <span class="tq-cost-label">Complexity</span>
+          <span class="tq-cost-value">${comparison.complexity}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if (estimate) {
+    const confDot = estimate.confidence === "high" ? "🟢" : estimate.confidence === "medium" ? "🟡" : "⚪";
+    return html`<div class="tq-section">
+      <div class="tq-section-title">💰 Cost Estimate</div>
+      <div class="tq-cost-detail">
+        <div class="tq-cost-main">
+          <span class="tq-cost-amount">~$${estimate.estimated_cost_usd.toFixed(2)}</span>
+          <span class="tq-cost-range">($${estimate.range.low.toFixed(2)} – $${estimate.range.high.toFixed(2)})</span>
+        </div>
+        <div class="tq-cost-meta">
+          <span>${confDot} ${estimate.confidence} confidence</span>
+          <span>·</span>
+          <span>${estimate.complexity}</span>
+          <span>·</span>
+          <span>~${estimate.estimated_turns} turns</span>
+          <span>·</span>
+          <span>${estimate.tier}</span>
+        </div>
+        <div class="tq-cost-tokens">
+          ~${fmtTokens(estimate.estimated_total_tokens)} tokens
+          (${fmtTokens(estimate.estimated_input_tokens)} in / ${fmtTokens(estimate.estimated_output_tokens)} out)
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // No estimate yet — show button
+  return html`<div class="tq-section">
+    <div class="tq-section-title">💰 Cost Estimate</div>
+    <button class="tq-btn-small" @click=${() => onEstimate(card.id, card.desc || card.name)}>
+      Estimate Cost
+    </button>
+  </div>`;
+}
+
 function renderCardDetail(props: TaskQueueProps, card: TaskQueueCard, lists: TaskQueueList[]) {
   const detail = props.cardDetail;
   const loading = props.cardDetailLoading;
@@ -374,6 +477,9 @@ function renderCardDetail(props: TaskQueueProps, card: TaskQueueCard, lists: Tas
             </div>`
             : nothing
         }
+
+        <!-- Cost Estimate -->
+        ${renderCostSection(card, props.costEstimates, props.costComparisons, props.onEstimateCost)}
 
         <!-- Overall progress -->
         ${
@@ -706,6 +812,24 @@ export function renderTaskQueue(props: TaskQueueProps) {
         padding: 16px; text-align: center; opacity: 0.4; font-size: 12px;
       }
 
+      /* Cost badges */
+      .tq-cost-badge {
+        font-size: 10px; padding: 1px 6px; border-radius: 4px;
+        border: 1px solid; background: var(--bg-muted); font-weight: 500;
+        white-space: nowrap;
+      }
+      .tq-cost-estimate { opacity: 0.7; }
+      .tq-cost-compare { display: flex; flex-direction: column; gap: 6px; }
+      .tq-cost-row { display: flex; justify-content: space-between; font-size: 13px; }
+      .tq-cost-label { opacity: 0.5; }
+      .tq-cost-value { font-weight: 600; }
+      .tq-cost-detail { }
+      .tq-cost-main { margin-bottom: 6px; }
+      .tq-cost-amount { font-size: 20px; font-weight: 700; }
+      .tq-cost-range { font-size: 12px; opacity: 0.4; margin-left: 8px; }
+      .tq-cost-meta { font-size: 12px; opacity: 0.5; display: flex; gap: 6px; flex-wrap: wrap; }
+      .tq-cost-tokens { font-size: 11px; opacity: 0.4; margin-top: 4px; }
+
       @media (max-width: 600px) {
         .tq-metrics-grid { grid-template-columns: repeat(2, 1fr); }
         .tq-model-name { width: 100px; }
@@ -770,7 +894,7 @@ export function renderTaskQueue(props: TaskQueueProps) {
 
     <div class="tq-board">
       ${cols.map((col) =>
-        renderColumn(col, byList.get(col) ?? [], props.selectedCardId, props.onSelectCard),
+        renderColumn(col, byList.get(col) ?? [], props.selectedCardId, props.onSelectCard, props.costEstimates, props.costComparisons),
       )}
     </div>
 

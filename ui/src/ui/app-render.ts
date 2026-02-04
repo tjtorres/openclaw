@@ -144,7 +144,7 @@ export function renderApp(state: AppViewState) {
             <span class="mono">${state.connected ? "OK" : "Offline"}</span>
           </div>
           <button
-            style="cursor: pointer; border: none; background: ${state.permissionsData?.autoRun ? '#e53935' : 'var(--bg-hover)'}; color: ${state.permissionsData?.autoRun ? 'white' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; transition: all 0.15s; ${state.permissionsData?.autoRun ? 'box-shadow: 0 0 8px rgba(229,57,53,0.3);' : ''}"
+            class="topbar-autorun ${state.permissionsData?.autoRun ? 'topbar-autorun--active' : 'topbar-autorun--idle'}"
             @click=${async () => {
               if (state.permissionsData?.autoRun) {
                 if (confirm('Kill switch: Stop ALL activity and disable auto-run?')) {
@@ -157,19 +157,18 @@ export function renderApp(state: AppViewState) {
               }
             }}
             title="${state.permissionsData?.autoRun ? 'KILL SWITCH: Stop all activity' : 'Enable auto-run'}"
-          >${state.permissionsData?.autoRun ? '🛑 STOP' : '▶️ Start'}</button>
+          ><span class="topbar-autorun__icon">${state.permissionsData?.autoRun ? '🛑' : '▶️'}</span><span class="topbar-autorun__label">${state.permissionsData?.autoRun ? 'STOP' : 'Start'}</span></button>
           <button
-            class="pill"
-            style="cursor: pointer; position: relative; border: none; background: var(--bg-hover); padding: 4px 10px"
+            class="topbar-notif"
             @click=${() => {
               state.tab = "notifications" as never;
               void state.loadNotifications();
             }}
             title="Notifications"
           >
-            <span style="font-size: 14px">🔔</span>
+            <span class="topbar-notif__icon">🔔</span>
             ${(state.notificationsData?.unreadCount ?? 0) > 0
-              ? html`<span style="position: absolute; top: -2px; right: -2px; background: #e53935; color: white; font-size: 10px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px">${state.notificationsData!.unreadCount}</span>`
+              ? html`<span class="topbar-notif__badge">${state.notificationsData!.unreadCount}</span>`
               : nothing}
           </button>
           ${renderThemeToggle(state)}
@@ -427,6 +426,10 @@ export function renderApp(state: AppViewState) {
                 cardMetricsLoading: state.taskQueueCardMetricsLoading,
                 activityData: state.activityData,
                 agentStatus: state.agentActivityStatus,
+                costEstimates: state.costEstimates,
+                costComparisons: state.costComparisons,
+                costSummary: state.costSummary,
+                onEstimateCost: (cardId: string, description: string) => state.estimateCardCost(cardId, description),
                 onRefresh: () => state.loadTaskQueue(),
                 onSelectCard: (cardId: string) => state.selectTaskQueueCard(cardId),
                 onCloseDetail: () => state.closeTaskQueueDetail(),

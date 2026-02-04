@@ -116,6 +116,14 @@ const BASE_METHODS = [
   "permissions.killSwitch",
   // Swarm
   "swarm.status",
+  // Costs
+  "costs.estimate",
+  "costs.estimateAll",
+  "costs.classify",
+  "costs.saveEstimate",
+  "costs.compare",
+  "costs.calibrate",
+  "costs.summary",
   // Push
   "push.vapidPublicKey",
   "push.subscribe",

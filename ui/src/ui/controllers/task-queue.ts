@@ -1,5 +1,5 @@
 import type { GatewayBrowserClient } from "../gateway.ts";
-import type { CardMetrics, TaskQueueCardDetail, TaskQueueSnapshot } from "../task-queue-types.ts";
+import type { CardMetrics, CostEstimate, CostComparison, CostSummary, TaskQueueCardDetail, TaskQueueSnapshot } from "../task-queue-types.ts";
 
 export type TaskQueueState = {
   client: GatewayBrowserClient | null;
@@ -12,6 +12,9 @@ export type TaskQueueState = {
   taskQueueCardDetailLoading: boolean;
   taskQueueCardMetrics: CardMetrics | null;
   taskQueueCardMetricsLoading: boolean;
+  costEstimates: Map<string, CostEstimate>;
+  costComparisons: Map<string, CostComparison>;
+  costSummary: CostSummary | null;
 };
 
 export async function loadTaskQueue(state: TaskQueueState) {
@@ -117,5 +120,60 @@ export async function toggleCheckItem(
     }
   } catch (err) {
     state.taskQueueError = `Toggle failed: ${String(err)}`;
+  }
+}
+
+/** Estimate cost for a card and cache result. */
+export async function estimateCost(state: TaskQueueState, cardId: string, description: string) {
+  if (!state.client || !state.connected) return;
+  try {
+    const est = await state.client.request<CostEstimate>("costs.estimate", { description });
+    state.costEstimates.set(cardId, est);
+    // Also save estimate to DB
+    const card = state.taskQueueSnapshot?.cards.find((c) => c.id === cardId);
+    if (card) {
+      state.client.request("costs.saveEstimate", {
+        cardId,
+        cardName: card.name,
+        description,
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn("Cost estimate failed:", err);
+  }
+}
+
+/** Load cost estimates for all visible cards. */
+export async function loadCostEstimates(state: TaskQueueState) {
+  if (!state.client || !state.connected || !state.taskQueueSnapshot) return;
+  const cards = state.taskQueueSnapshot.cards.filter(
+    (c) => c.listName !== "Done" && !state.costEstimates.has(c.id),
+  );
+  // Batch estimate — don't block UI
+  for (const card of cards) {
+    estimateCost(state, card.id, card.desc || card.name).catch(() => {});
+  }
+}
+
+/** Load cost comparison for a completed card. */
+export async function loadCostComparison(state: TaskQueueState, cardId: string) {
+  if (!state.client || !state.connected) return;
+  try {
+    const comp = await state.client.request<CostComparison>("costs.compare", { cardId });
+    if (comp && !("error" in comp)) {
+      state.costComparisons.set(cardId, comp);
+    }
+  } catch (err) {
+    console.warn("Cost comparison failed:", err);
+  }
+}
+
+/** Load overall cost summary. */
+export async function loadCostSummary(state: TaskQueueState) {
+  if (!state.client || !state.connected) return;
+  try {
+    state.costSummary = await state.client.request<CostSummary>("costs.summary", {});
+  } catch (err) {
+    console.warn("Cost summary failed:", err);
   }
 }
