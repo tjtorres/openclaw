@@ -3,6 +3,72 @@ import type { GatewayHelloOk } from "../gateway.ts";
 import type { UiSettings } from "../storage.ts";
 import { formatAgo, formatDurationMs } from "../format.ts";
 import { formatNextRun } from "../presenter.ts";
+
+export type PermissionsSummary = {
+  level: number;
+  levelName: string;
+  levelLabel: string;
+  role: string;
+  approvedEpochs: string[];
+  budgetPerDay: number;
+  budgetPerSprint: number;
+  granted: string[];
+  denied: string[];
+  totalGranted: number;
+  totalDenied: number;
+  configured: boolean;
+};
+
+const LEVEL_COLORS: Record<number, string> = {
+  1: "#78909c",
+  2: "#42a5f5",
+  3: "#66bb6a",
+  4: "#ffa726",
+  5: "#ab47bc",
+};
+
+function renderPermissionsWidget(perms: PermissionsSummary | null) {
+  if (!perms || !perms.configured) {
+    return html`<div class="card" style="padding: 12px 16px">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px">Autonomy</div>
+      <div class="muted">Not configured</div>
+    </div>`;
+  }
+
+  const levelColor = LEVEL_COLORS[perms.level] || "#78909c";
+  const pct = Math.round((perms.totalGranted / (perms.totalGranted + perms.totalDenied)) * 100);
+
+  return html`
+    <div class="card" style="padding: 14px 18px">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted)">Autonomy & Permissions</div>
+        <span style="background: ${levelColor}; color: white; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600">${perms.levelLabel}</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 10px">
+        <div>
+          <div style="font-size: 11px; color: var(--text-muted)">Role</div>
+          <div style="font-size: 14px; font-weight: 600; text-transform: capitalize">${perms.role}</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: var(--text-muted)">Budget</div>
+          <div style="font-size: 14px; font-weight: 600">$${perms.budgetPerDay}/day</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: var(--text-muted)">Capabilities</div>
+          <div style="font-size: 14px; font-weight: 600">${perms.totalGranted}/${perms.totalGranted + perms.totalDenied}</div>
+        </div>
+      </div>
+      <div style="height: 4px; background: var(--bg-hover, rgba(255,255,255,0.08)); border-radius: 2px; overflow: hidden">
+        <div style="height: 100%; width: ${pct}%; background: ${levelColor}; border-radius: 2px"></div>
+      </div>
+      ${perms.approvedEpochs.length > 0 ? html`
+        <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap">
+          ${perms.approvedEpochs.map((e) => html`<span style="font-size: 11px; padding: 1px 8px; border-radius: 8px; background: rgba(255,255,255,0.06); color: var(--text-muted)">${e}</span>`)}
+        </div>
+      ` : nothing}
+    </div>
+  `;
+}
 import { renderActivityFeed, type ActivityFeedData } from "./activity-feed.ts";
 
 export type WorkStatusData = {
@@ -47,6 +113,7 @@ export type OverviewProps = {
   agentLastEvent: number;
   agentSession: string | null;
   workStatus: WorkStatusData | null;
+  permissions: PermissionsSummary | null;
   onSettingsChange: (next: UiSettings) => void;
   onPasswordChange: (next: string) => void;
   onSessionKeyChange: (next: string) => void;
@@ -346,6 +413,10 @@ export function renderOverview(props: OverviewProps) {
         </div>
         <div class="muted">Next wake ${formatNextRun(props.cronNext)}</div>
       </div>
+    </section>
+
+    <section style="margin-top: 18px;">
+      ${renderPermissionsWidget(props.permissions)}
     </section>
 
     <section style="margin-top: 18px;">

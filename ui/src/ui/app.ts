@@ -280,6 +280,7 @@ export class OpenClawApp extends LitElement {
   private activityPollTimer: number | null = null;
   @state() workStatus: WorkStatusData | null = null;
   private workStatusPollTimer: number | null = null;
+  @state() permissionsData: import("./views/overview.ts").PermissionsSummary | null = null;
   @state() notificationsData: import("./views/notifications.ts").NotificationsData | null = null;
   @state() notificationsLoading = false;
   @state() notificationsError: string | null = null;
@@ -574,6 +575,15 @@ export class OpenClawApp extends LitElement {
     if (this.workStatusPollTimer != null) {
       window.clearInterval(this.workStatusPollTimer);
       this.workStatusPollTimer = null;
+    }
+  }
+
+  async loadPermissions() {
+    if (!this.client || !this.connected) return;
+    try {
+      this.permissionsData = await this.client.request<import("./views/overview.ts").PermissionsSummary>("permissions.summary", {});
+    } catch {
+      // Not available — OK
     }
   }
 

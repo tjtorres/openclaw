@@ -263,6 +263,7 @@ export function renderApp(state: AppViewState) {
                 agentLastEvent: state.agentActivityLastEvent,
                 agentSession: state.agentActivitySession,
                 workStatus: state.workStatus,
+                permissions: state.permissionsData,
                 onSettingsChange: (next) => state.applySettings(next),
                 onPasswordChange: (next) => (state.password = next),
                 onSessionKeyChange: (next) => {

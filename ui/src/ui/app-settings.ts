@@ -463,6 +463,10 @@ export async function loadOverview(host: SettingsHost) {
   if (typeof app.startWorkStatusPolling === "function") {
     app.startWorkStatusPolling();
   }
+  // Load permissions for overview widget
+  if (typeof app.loadPermissions === "function") {
+    void app.loadPermissions();
+  }
   // Always load notifications for badge count + setup push
   if (typeof app.loadNotifications === "function") {
     void app.loadNotifications();

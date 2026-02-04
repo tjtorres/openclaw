@@ -14,6 +14,7 @@ import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
 import { healthHandlers } from "./server-methods/health.js";
 import { issuesHandlers } from "./server-methods/issues.js";
 import { notificationsHandlers } from "./server-methods/notifications.js";
+import { permissionsHandlers } from "./server-methods/permissions.js";
 import { pushHandlers } from "./server-methods/push.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { metricsHandlers } from "./server-methods/metrics.js";
@@ -197,6 +198,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...metricsHandlers,
   ...issuesHandlers,
   ...notificationsHandlers,
+  ...permissionsHandlers,
   ...pushHandlers,
   ...activityHandlers,
 };

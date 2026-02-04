@@ -110,6 +110,8 @@ const BASE_METHODS = [
   "notifications.list",
   "notifications.dismiss",
   "notifications.dismissAll",
+  // Permissions
+  "permissions.summary",
   // Push
   "push.vapidPublicKey",
   "push.subscribe",
