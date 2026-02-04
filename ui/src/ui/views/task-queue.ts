@@ -6,6 +6,7 @@ import type {
   TaskQueueList,
   TaskQueueSnapshot,
 } from "../task-queue-types.ts";
+import type { ActivityEntry, ActivityFeedData } from "./activity-feed.ts";
 
 export type TaskQueueProps = {
   loading: boolean;
@@ -16,6 +17,8 @@ export type TaskQueueProps = {
   cardDetailLoading: boolean;
   cardMetrics: CardMetrics | null;
   cardMetricsLoading: boolean;
+  activityData: ActivityFeedData | null;
+  agentStatus: "idle" | "working";
   onRefresh: () => void;
   onSelectCard: (cardId: string) => void;
   onCloseDetail: () => void;
@@ -224,6 +227,71 @@ function renderCardMetrics(metrics: CardMetrics | null, loading: boolean) {
   </div>`;
 }
 
+function renderLiveOutput(
+  cardId: string,
+  activityData: ActivityFeedData | null,
+  agentStatus: "idle" | "working",
+) {
+  if (!activityData) return nothing;
+
+  const isActiveCard = activityData.currentTask?.cardId === cardId;
+  const cardEntries = activityData.entries.filter(
+    (e: ActivityEntry) => e.cardId === cardId,
+  ).slice(0, 15);
+
+  if (cardEntries.length === 0 && !isActiveCard) return nothing;
+
+  const catColor = (cat: string): string => {
+    switch (cat) {
+      case "commit": return "#1f6feb";
+      case "check": return "#238636";
+      case "task": return "#d29922";
+      case "done": return "#238636";
+      case "status": return "#8b949e";
+      case "activate": return "#a371f7";
+      default: return "#8b949e";
+    }
+  };
+
+  const tAgo = (ts: string): string => {
+    const diff = Date.now() - new Date(ts).getTime();
+    const s = Math.floor(diff / 1000);
+    if (s < 10) return "just now";
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  };
+
+  return html`<div class="tq-section">
+    <div class="tq-section-title" style="display:flex;align-items:center;gap:8px;">
+      ${isActiveCard && agentStatus === "working"
+        ? html`<span class="tq-live-dot"></span> Live Output`
+        : isActiveCard
+          ? html`<span class="tq-live-dot tq-live-idle"></span> Active Task`
+          : html`📋 Activity Log`
+      }
+    </div>
+    <div class="tq-live-entries">
+      ${cardEntries.map((e: ActivityEntry) => html`
+        <div class="tq-live-entry">
+          <span class="tq-live-icon">${e.icon}</span>
+          <span class="tq-live-msg">
+            <span class="tq-live-cat-dot" style="background:${catColor(e.category)}"></span>
+            ${e.message}
+          </span>
+          <span class="tq-live-ts">${tAgo(e.ts)}</span>
+        </div>
+      `)}
+      ${cardEntries.length === 0 ? html`
+        <div class="tq-live-empty">Waiting for activity…</div>
+      ` : nothing}
+    </div>
+  </div>`;
+}
+
 function renderCardDetail(props: TaskQueueProps, card: TaskQueueCard, lists: TaskQueueList[]) {
   const detail = props.cardDetail;
   const loading = props.cardDetailLoading;
@@ -333,6 +401,9 @@ function renderCardDetail(props: TaskQueueProps, card: TaskQueueCard, lists: Tas
 
         <!-- Card Metrics -->
         ${renderCardMetrics(props.cardMetrics, props.cardMetricsLoading)}
+
+        <!-- Live Output -->
+        ${renderLiveOutput(card.id, props.activityData, props.agentStatus)}
 
         <!-- Checklists -->
         ${
@@ -610,6 +681,36 @@ export function renderTaskQueue(props: TaskQueueProps) {
       }
       .tq-model-bar { height: 100%; background: #58a6ff; border-radius: 3px; transition: width 0.3s ease; }
       .tq-model-cost { width: 60px; text-align: right; font-weight: 600; opacity: 0.8; }
+
+      /* Live Output */
+      .tq-live-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #238636; display: inline-block;
+        animation: tq-blink 2s infinite;
+      }
+      .tq-live-idle { background: #d29922; animation: none; }
+      @keyframes tq-blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+      .tq-live-entries {
+        max-height: 220px; overflow-y: auto;
+        border: 1px solid var(--border); border-radius: 8px;
+        background: var(--bg-muted);
+      }
+      .tq-live-entry {
+        display: grid; grid-template-columns: 22px 1fr auto;
+        gap: 6px; padding: 6px 10px; font-size: 12px;
+        border-bottom: 1px solid var(--border); align-items: start;
+      }
+      .tq-live-entry:last-child { border-bottom: none; }
+      .tq-live-icon { text-align: center; font-size: 13px; }
+      .tq-live-msg { word-break: break-word; line-height: 1.4; opacity: 0.8; }
+      .tq-live-cat-dot {
+        display: inline-block; width: 5px; height: 5px;
+        border-radius: 50%; margin-right: 4px; vertical-align: middle;
+      }
+      .tq-live-ts { font-size: 10px; opacity: 0.35; white-space: nowrap; }
+      .tq-live-empty {
+        padding: 16px; text-align: center; opacity: 0.4; font-size: 12px;
+      }
 
       @media (max-width: 600px) {
         .tq-metrics-grid { grid-template-columns: repeat(2, 1fr); }

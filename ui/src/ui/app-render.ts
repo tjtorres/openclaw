@@ -353,6 +353,8 @@ export function renderApp(state: AppViewState) {
                 cardDetailLoading: state.taskQueueCardDetailLoading,
                 cardMetrics: state.taskQueueCardMetrics,
                 cardMetricsLoading: state.taskQueueCardMetricsLoading,
+                activityData: state.activityData,
+                agentStatus: state.agentActivityStatus,
                 onRefresh: () => state.loadTaskQueue(),
                 onSelectCard: (cardId: string) => state.selectTaskQueueCard(cardId),
                 onCloseDetail: () => state.closeTaskQueueDetail(),
