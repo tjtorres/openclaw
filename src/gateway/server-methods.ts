@@ -13,6 +13,7 @@ import { deviceHandlers } from "./server-methods/devices.js";
 import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
 import { healthHandlers } from "./server-methods/health.js";
 import { issuesHandlers } from "./server-methods/issues.js";
+import { notificationsHandlers } from "./server-methods/notifications.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { metricsHandlers } from "./server-methods/metrics.js";
 import { modelsHandlers } from "./server-methods/models.js";
@@ -194,6 +195,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...taskQueueHandlers,
   ...metricsHandlers,
   ...issuesHandlers,
+  ...notificationsHandlers,
   ...activityHandlers,
 };
 

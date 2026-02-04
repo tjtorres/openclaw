@@ -280,6 +280,10 @@ export class OpenClawApp extends LitElement {
   private activityPollTimer: number | null = null;
   @state() workStatus: WorkStatusData | null = null;
   private workStatusPollTimer: number | null = null;
+  @state() notificationsData: import("./views/notifications.ts").NotificationsData | null = null;
+  @state() notificationsLoading = false;
+  @state() notificationsError: string | null = null;
+  private notificationsPollTimer: number | null = null;
   @state() metricsLoading = false;
   @state() metricsData: MetricsData | null = null;
   @state() metricsError: string | null = null;
@@ -570,6 +574,60 @@ export class OpenClawApp extends LitElement {
     if (this.workStatusPollTimer != null) {
       window.clearInterval(this.workStatusPollTimer);
       this.workStatusPollTimer = null;
+    }
+  }
+
+  async loadNotifications() {
+    if (!this.client || !this.connected) return;
+    this.notificationsLoading = true;
+    try {
+      const res = await this.client.request<import("./views/notifications.ts").NotificationsData>("notifications.list", {});
+      this.notificationsData = res;
+      this.notificationsError = null;
+    } catch (err) {
+      this.notificationsError = String(err);
+    } finally {
+      this.notificationsLoading = false;
+    }
+  }
+
+  startNotificationsPolling() {
+    this.stopNotificationsPolling();
+    void this.loadNotifications();
+    this.notificationsPollTimer = window.setInterval(() => {
+      if (this.connected) void this.loadNotifications();
+    }, 30000);
+  }
+
+  stopNotificationsPolling() {
+    if (this.notificationsPollTimer != null) {
+      window.clearInterval(this.notificationsPollTimer);
+      this.notificationsPollTimer = null;
+    }
+  }
+
+  async handleNotificationAction(action: string, params: Record<string, unknown>) {
+    if (action === "navigate") {
+      const tab = params.tab as string;
+      if (tab) {
+        const { setTab } = await import("./app-settings.ts");
+        setTab(this as never, tab as never);
+      }
+      return;
+    }
+    // Execute RPC action (e.g., taskQueue.approveCard)
+    if (this.client && this.connected) {
+      try {
+        await this.client.request(action, params);
+        // Refresh notifications after action
+        void this.loadNotifications();
+        // Also refresh task queue if it was an approval
+        if (action.includes("approve") || action.includes("move")) {
+          void this.loadTaskQueue();
+        }
+      } catch (err) {
+        console.error("Notification action failed:", err);
+      }
     }
   }
 

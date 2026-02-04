@@ -6,7 +6,7 @@ export const TAB_GROUPS = [
     label: "Control",
     tabs: ["overview", "channels", "instances", "sessions", "cron"],
   },
-  { label: "Work", tabs: ["task-queue", "sprints", "metrics", "issues"] },
+  { label: "Work", tabs: ["notifications", "task-queue", "sprints", "metrics", "issues"] },
   { label: "Agent", tabs: ["agents", "skills", "nodes"] },
   { label: "Settings", tabs: ["config", "debug", "logs"] },
 ] as const;
@@ -18,6 +18,7 @@ export type Tab =
   | "instances"
   | "sessions"
   | "cron"
+  | "notifications"
   | "task-queue"
   | "sprints"
   | "metrics"
@@ -36,6 +37,7 @@ const TAB_PATHS: Record<Tab, string> = {
   instances: "/instances",
   sessions: "/sessions",
   cron: "/cron",
+  notifications: "/notifications",
   "task-queue": "/task-queue",
   sprints: "/sprints",
   metrics: "/metrics",
@@ -145,6 +147,8 @@ export function iconForTab(tab: Tab): IconName {
       return "fileText";
     case "cron":
       return "loader";
+    case "notifications":
+      return "bell";
     case "task-queue":
       return "check";
     case "sprints":
@@ -182,6 +186,8 @@ export function titleForTab(tab: Tab) {
       return "Sessions";
     case "cron":
       return "Cron Jobs";
+    case "notifications":
+      return "Notifications";
     case "task-queue":
       return "Task Queue";
     case "sprints":
@@ -221,6 +227,8 @@ export function subtitleForTab(tab: Tab) {
       return "Inspect active sessions and adjust per-session defaults.";
     case "cron":
       return "Schedule wakeups and recurring agent runs.";
+    case "notifications":
+      return "Proposals, alerts, and items needing your attention.";
     case "task-queue":
       return "Kanban view of the task queue board.";
     case "metrics":

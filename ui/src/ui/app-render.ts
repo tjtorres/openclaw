@@ -69,6 +69,7 @@ import { renderMetrics } from "./views/metrics.ts";
 import { renderSprints } from "./views/sprints.ts";
 import { renderNodes } from "./views/nodes.ts";
 import { renderOverview } from "./views/overview.ts";
+import { renderNotifications } from "./views/notifications.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
 import { renderTaskQueue } from "./views/task-queue.ts";
@@ -142,6 +143,20 @@ export function renderApp(state: AppViewState) {
             <span>Health</span>
             <span class="mono">${state.connected ? "OK" : "Offline"}</span>
           </div>
+          <button
+            class="pill"
+            style="cursor: pointer; position: relative; border: none; background: var(--bg-hover); padding: 4px 10px"
+            @click=${() => {
+              state.tab = "notifications" as never;
+              void state.loadNotifications();
+            }}
+            title="Notifications"
+          >
+            <span style="font-size: 14px">🔔</span>
+            ${(state.notificationsData?.unreadCount ?? 0) > 0
+              ? html`<span style="position: absolute; top: -2px; right: -2px; background: #e53935; color: white; font-size: 10px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px">${state.notificationsData!.unreadCount}</span>`
+              : nothing}
+          </button>
           ${renderThemeToggle(state)}
         </div>
       </header>
@@ -366,6 +381,18 @@ export function renderApp(state: AppViewState) {
                 onRun: (job) => runCronJob(state, job),
                 onRemove: (job) => removeCronJob(state, job),
                 onLoadRuns: (jobId) => loadCronRuns(state, jobId),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "notifications"
+            ? renderNotifications({
+                loading: state.notificationsLoading,
+                data: state.notificationsData,
+                error: state.notificationsError,
+                onAction: (action, params) => state.handleNotificationAction(action, params),
+                onRefresh: () => state.loadNotifications(),
               })
             : nothing
         }

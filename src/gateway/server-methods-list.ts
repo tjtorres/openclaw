@@ -106,6 +106,8 @@ const BASE_METHODS = [
   "activity.workStatus",
   // Issues
   "issues.list",
+  // Notifications
+  "notifications.list",
   "issues.create",
   "issues.resolve",
   "issues.dismiss",

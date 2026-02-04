@@ -184,6 +184,17 @@ export async function refreshActiveTab(host: SettingsHost) {
       }
     }
   }
+  // Notifications polling
+  {
+    const app = host as unknown as OpenClawApp;
+    if (host.tab === "notifications") {
+      app.startNotificationsPolling();
+    } else {
+      if (typeof app.stopNotificationsPolling === "function") {
+        app.stopNotificationsPolling();
+      }
+    }
+  }
   if (host.tab === "overview") {
     await loadOverview(host);
   }
@@ -451,6 +462,10 @@ export async function loadOverview(host: SettingsHost) {
   // Start work status polling when overview is visible
   if (typeof app.startWorkStatusPolling === "function") {
     app.startWorkStatusPolling();
+  }
+  // Always load notifications for badge count
+  if (typeof app.loadNotifications === "function") {
+    void app.loadNotifications();
   }
 }
 
