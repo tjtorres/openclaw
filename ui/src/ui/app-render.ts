@@ -378,8 +378,8 @@ export function renderApp(state: AppViewState) {
                 error: state.sprintsError,
                 showCreateForm: state.sprintsShowCreateForm,
                 onRefresh: () => state.loadSprints(),
-                onCreate: (name: string, goal: string, endDate: string) =>
-                  state.createSprint(name, goal, endDate),
+                onCreate: (name: string, goal: string, endDate: string, pull: boolean) =>
+                  state.createSprint(name, goal, endDate, pull),
                 onComplete: (sprintId: string) => state.completeSprint(sprintId),
                 onCancel: (sprintId: string) => state.cancelSprint(sprintId),
                 onToggleCreateForm: () => state.toggleSprintCreateForm(),

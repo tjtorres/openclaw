@@ -52,7 +52,7 @@ export type SprintsProps = {
   error: string | null;
   showCreateForm: boolean;
   onRefresh: () => void;
-  onCreate: (name: string, goal: string, endDate: string) => void;
+  onCreate: (name: string, goal: string, endDate: string, pullFromBoard: boolean) => void;
   onComplete: (sprintId: string) => void;
   onCancel: (sprintId: string) => void;
   onToggleCreateForm: () => void;
@@ -193,12 +193,17 @@ function renderCreateForm(props: SprintsProps) {
         <label class="sp-form-label">End date</label>
         <input id="sp-end" type="date" class="sp-input" value="${twoWeeks}" min="${today}" />
       </div>
+      <label class="sp-form-row" style="cursor:pointer;font-size:13px;gap:8px;">
+        <input id="sp-pull" type="checkbox" checked style="accent-color:#238636" />
+        Pull Approved + In Progress cards from Task Queue board
+      </label>
       <div class="sp-form-actions">
         <button class="sp-btn sp-btn-primary" @click=${() => {
           const name = (document.getElementById("sp-name") as HTMLInputElement)?.value?.trim();
           const goal = (document.getElementById("sp-goal") as HTMLInputElement)?.value?.trim() ?? "";
           const end = (document.getElementById("sp-end") as HTMLInputElement)?.value ?? twoWeeks;
-          if (name) props.onCreate(name, goal, end);
+          const pull = (document.getElementById("sp-pull") as HTMLInputElement)?.checked ?? false;
+          if (name) props.onCreate(name, goal, end, pull);
         }}>Create Sprint</button>
         <button class="sp-btn" @click=${props.onToggleCreateForm}>Cancel</button>
       </div>

@@ -599,8 +599,8 @@ export class OpenClawApp extends LitElement {
   async loadSprints() {
     await loadSprintsInternal(this as unknown as Parameters<typeof loadSprintsInternal>[0]);
   }
-  async createSprint(name: string, goal: string, endDate: string) {
-    await createSprintInternal(this as unknown as Parameters<typeof createSprintInternal>[0], name, goal, endDate);
+  async createSprint(name: string, goal: string, endDate: string, pullFromBoard = false) {
+    await createSprintInternal(this as unknown as Parameters<typeof createSprintInternal>[0], name, goal, endDate, pullFromBoard);
   }
   async completeSprint(sprintId: string) {
     await completeSprintInternal(this as unknown as Parameters<typeof completeSprintInternal>[0], sprintId);

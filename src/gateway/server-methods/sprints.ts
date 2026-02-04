@@ -134,13 +134,14 @@ export const sprintHandlers: GatewayRequestHandlers = {
     });
   },
 
-  "sprints.create": ({ params, respond }) => {
-    const { name, goal, startDate, endDate, cardIds } = params as {
+  "sprints.create": async ({ params, respond }) => {
+    const { name, goal, startDate, endDate, cardIds, pullFromBoard } = params as {
       name?: string;
       goal?: string;
       startDate?: string;
       endDate?: string;
       cardIds?: Array<{ id: string; name: string }>;
+      pullFromBoard?: boolean;
     };
 
     if (!name) {
@@ -160,6 +161,39 @@ export const sprintHandlers: GatewayRequestHandlers = {
       return;
     }
 
+    // Optionally pull cards from Trello board (Approved + In Progress)
+    let boardCards: Array<{ id: string; name: string }> = cardIds ?? [];
+    if (pullFromBoard) {
+      try {
+        const workspace = process.env.OPENCLAW_WORKSPACE ?? join(process.env.HOME ?? "/home/teej", ".openclaw", "workspace");
+        const configPath = join(workspace, "trello_task_queue.json");
+        const config = JSON.parse(readFileSync(configPath, "utf-8"));
+        const apiKey = process.env.TRELLO_API_KEY;
+        const apiToken = process.env.TRELLO_TOKEN;
+        if (apiKey && apiToken) {
+          const res = await fetch(
+            `https://api.trello.com/1/boards/${config.boardId}/cards?fields=name,idList&key=${apiKey}&token=${apiToken}`,
+          );
+          if (res.ok) {
+            const cards = (await res.json()) as Array<{ id: string; name: string; idList: string }>;
+            const approvedList = config.lists?.Approved;
+            const inProgressList = config.lists?.["In Progress"];
+            const pulled = cards.filter(
+              (c) => c.idList === approvedList || c.idList === inProgressList,
+            );
+            // Merge with any explicitly provided cards, dedup by id
+            const seen = new Set(boardCards.map((c) => c.id));
+            for (const c of pulled) {
+              if (!seen.has(c.id)) {
+                boardCards.push({ id: c.id, name: c.name });
+                seen.add(c.id);
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
     const now = new Date().toISOString();
     const sprint: Sprint = {
       id: `SPR-${String(file.nextId).padStart(3, "0")}`,
@@ -168,7 +202,7 @@ export const sprintHandlers: GatewayRequestHandlers = {
       status: "active",
       startDate: startDate ?? now.split("T")[0]!,
       endDate: endDate ?? new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0]!,
-      cards: (cardIds ?? []).map((c) => ({
+      cards: boardCards.map((c) => ({
         cardId: c.id,
         cardName: c.name,
         addedAt: now,

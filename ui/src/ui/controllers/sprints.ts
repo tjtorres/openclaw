@@ -30,10 +30,11 @@ export async function createSprint(
   name: string,
   goal: string,
   endDate: string,
+  pullFromBoard = false,
 ) {
   if (!state.client || !state.connected) return;
   try {
-    await state.client.request("sprints.create", { name, goal, endDate });
+    await state.client.request("sprints.create", { name, goal, endDate, pullFromBoard });
     state.sprintsShowCreateForm = false;
     await loadSprints(state);
   } catch (err) {
