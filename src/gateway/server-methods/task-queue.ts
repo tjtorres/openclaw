@@ -1,16 +1,28 @@
+/**
+ * Task Queue RPC handlers.
+ *
+ * Read operations use tasks.sqlite (fast, offline-capable).
+ * Write operations go to Trello API (source of truth) + update DB via sync.
+ */
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { GatewayRequestHandlers } from "./types.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
+import {
+  getTasksDb,
+  getTasksDbWritable,
+  refreshTasksDb,
+  getLists,
+  getCardsByBoard,
+  getCard,
+  getChecklists,
+  getChecklistProgress,
+  getComments,
+  getActivityByCard,
+  workspacePath,
+} from "./tasks-db.js";
 
 type SqliteDatabase = import("node:sqlite").DatabaseSync;
-
-function workspacePath(): string {
-  return (
-    process.env.OPENCLAW_WORKSPACE ??
-    join(process.env.HOME ?? "/home/teej", ".openclaw", "workspace")
-  );
-}
 
 function getCostDb(): SqliteDatabase | null {
   try {
@@ -23,46 +35,6 @@ function getCostDb(): SqliteDatabase | null {
   }
 }
 
-type ActivityEntry = {
-  ts: string;
-  category: string;
-  cardId?: string;
-  cardName?: string;
-  message?: string;
-};
-
-/** Build time windows for a card from activity.jsonl (activate → done/next activate). */
-function getCardTimeWindows(cardId: string): Array<{ start: string; end: string | null }> {
-  const logPath = join(workspacePath(), "activity.jsonl");
-  if (!existsSync(logPath)) return [];
-
-  const lines = readFileSync(logPath, "utf-8").trim().split("\n").filter(Boolean);
-  const entries: ActivityEntry[] = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-
-  const windows: Array<{ start: string; end: string | null }> = [];
-  let currentStart: string | null = null;
-
-  for (const entry of entries) {
-    if (entry.category === "activate" && entry.cardId === cardId) {
-      currentStart = entry.ts;
-    } else if (currentStart && entry.category === "activate" && entry.cardId !== cardId) {
-      // Different card activated — close window
-      windows.push({ start: currentStart, end: entry.ts });
-      currentStart = null;
-    } else if (currentStart && entry.category === "done" && entry.cardId === cardId) {
-      windows.push({ start: currentStart, end: entry.ts });
-      currentStart = null;
-    }
-  }
-
-  // If card is still active, window is open
-  if (currentStart) {
-    windows.push({ start: currentStart, end: null });
-  }
-
-  return windows;
-}
-
 function readTaskQueueConfig(): {
   boardId: string;
   apiKey: string;
@@ -71,10 +43,7 @@ function readTaskQueueConfig(): {
   newLabelId: string;
 } | null {
   try {
-    const workspace =
-      process.env.OPENCLAW_WORKSPACE ??
-      join(process.env.HOME ?? "/home/teej", ".openclaw", "workspace");
-    const configPath = join(workspace, "trello_task_queue.json");
+    const configPath = join(workspacePath(), "trello_task_queue.json");
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
     const apiKey = process.env.TRELLO_API_KEY;
     const apiToken = process.env.TRELLO_TOKEN;
@@ -83,7 +52,7 @@ function readTaskQueueConfig(): {
       boardId: config.boardId,
       apiKey,
       apiToken,
-      approvedLabelId: config.labels?.approved ?? config.approvedLabelId ?? "",
+      approvedLabelId: config.labels?.approved ?? "",
       newLabelId: config.labels?.new ?? "",
     };
   } catch {
@@ -91,24 +60,24 @@ function readTaskQueueConfig(): {
   }
 }
 
+// ── Trello API helpers (for writes only) ─────────────────────
+
 function trelloUrl(path: string, apiKey: string, apiToken: string): string {
   return `https://api.trello.com/1${path}${path.includes("?") ? "&" : "?"}key=${apiKey}&token=${apiToken}`;
 }
 
-async function fetchTrello(path: string, apiKey: string, apiToken: string): Promise<unknown> {
-  const res = await fetch(trelloUrl(path, apiKey, apiToken));
+async function putTrello(path: string, key: string, token: string, body?: Record<string, string>) {
+  const res = await fetch(trelloUrl(path, key, token), {
+    method: "PUT",
+    headers: body ? { "Content-Type": "application/x-www-form-urlencoded" } : {},
+    body: body ? new URLSearchParams(body).toString() : undefined,
+  });
   if (!res.ok) throw new Error(`Trello API error: ${res.status}`);
   return res.json();
 }
 
-async function postTrello(
-  path: string,
-  apiKey: string,
-  apiToken: string,
-  body?: Record<string, string>,
-): Promise<unknown> {
-  const url = trelloUrl(path, apiKey, apiToken);
-  const res = await fetch(url, {
+async function postTrello(path: string, key: string, token: string, body?: Record<string, string>) {
+  const res = await fetch(trelloUrl(path, key, token), {
     method: "POST",
     headers: body ? { "Content-Type": "application/x-www-form-urlencoded" } : {},
     body: body ? new URLSearchParams(body).toString() : undefined,
@@ -117,26 +86,9 @@ async function postTrello(
   return res.json();
 }
 
-async function deleteTrello(path: string, apiKey: string, apiToken: string): Promise<void> {
-  const url = trelloUrl(path, apiKey, apiToken);
-  const res = await fetch(url, { method: "DELETE" });
+async function deleteTrello(path: string, key: string, token: string) {
+  const res = await fetch(trelloUrl(path, key, token), { method: "DELETE" });
   if (!res.ok && res.status !== 404) throw new Error(`Trello API error: ${res.status}`);
-}
-
-async function putTrello(
-  path: string,
-  apiKey: string,
-  apiToken: string,
-  body?: Record<string, string>,
-): Promise<unknown> {
-  const url = trelloUrl(path, apiKey, apiToken);
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: body ? { "Content-Type": "application/x-www-form-urlencoded" } : {},
-    body: body ? new URLSearchParams(body).toString() : undefined,
-  });
-  if (!res.ok) throw new Error(`Trello API error: ${res.status}`);
-  return res.json();
 }
 
 function requireConfig(respond: (...args: unknown[]) => void) {
@@ -149,73 +101,101 @@ function requireConfig(respond: (...args: unknown[]) => void) {
 }
 
 export const taskQueueHandlers: GatewayRequestHandlers = {
+  /**
+   * List all cards on the board — reads from DB.
+   * Falls back to Trello API if DB unavailable.
+   */
   "taskQueue.list": async ({ respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
 
+    const db = getTasksDb();
+    if (db) {
+      try {
+        const lists = getLists(db, config.boardId);
+        const cards = getCardsByBoard(db, config.boardId);
+
+        const listMap = new Map(lists.map((l) => [l.id, l.name]));
+
+        // Batch get checklist progress for all cards
+        const cardData = cards.map((c) => {
+          const progress = getChecklistProgress(db, c.id);
+          let labels: Array<{ id: string; name: string; color?: string }> = [];
+          try { labels = JSON.parse(c.labels || "[]"); } catch {}
+          const commentCount = db.prepare("SELECT COUNT(*) as cnt FROM comments WHERE card_id=?").all(c.id);
+
+          return {
+            id: c.id,
+            name: c.name,
+            desc: c.description ?? "",
+            url: c.url || `https://trello.com/c/${c.id}`,
+            listId: c.list_id,
+            listName: listMap.get(c.list_id) ?? null,
+            labels: labels.map((l) => l.name),
+            labelIds: labels.map((l) => l.id),
+            hasChecklists: progress.total > 0,
+            checkItems: progress.total,
+            checkItemsChecked: progress.done,
+            commentCount: Number((commentCount[0] as { cnt: number })?.cnt ?? 0),
+            dateLastActivity: c.updated_at,
+          };
+        });
+
+        respond(true, {
+          board: {
+            id: config.boardId,
+            name: "Jeeves Task Queue",
+            url: `https://trello.com/b/${config.boardId}`,
+          },
+          lists: lists.map((l) => ({ id: l.id, name: l.name, closed: false })),
+          cards: cardData,
+          source: "db",
+          fetchedAt: Date.now(),
+        });
+        return;
+      } catch (err) {
+        // Fall through to Trello API
+        console.error("DB read failed, falling back to Trello:", err);
+      }
+    }
+
+    // Fallback: Trello API (same as before)
     try {
       const [lists, cards] = await Promise.all([
-        fetchTrello(
-          `/boards/${config.boardId}/lists?fields=name,closed`,
-          config.apiKey,
-          config.apiToken,
-        ) as Promise<Array<{ id: string; name: string; closed: boolean }>>,
-        fetchTrello(
-          `/boards/${config.boardId}/cards?fields=name,desc,idList,url,labels,idChecklists,dateLastActivity,badges`,
-          config.apiKey,
-          config.apiToken,
-        ) as Promise<
-          Array<{
-            id: string;
-            name: string;
-            desc: string;
-            idList: string;
-            url: string;
-            labels: Array<{ id: string; name: string }>;
-            idChecklists: string[];
-            dateLastActivity: string;
-            badges: { checkItems: number; checkItemsChecked: number; comments: number };
-          }>
-        >,
-      ]);
+        fetch(trelloUrl(`/boards/${config.boardId}/lists?fields=name,closed`, config.apiKey, config.apiToken)).then((r) => r.json()),
+        fetch(trelloUrl(`/boards/${config.boardId}/cards?fields=name,desc,idList,url,labels,idChecklists,dateLastActivity,badges`, config.apiKey, config.apiToken)).then((r) => r.json()),
+      ]) as [
+        Array<{ id: string; name: string; closed: boolean }>,
+        Array<{
+          id: string; name: string; desc: string; idList: string; url: string;
+          labels: Array<{ id: string; name: string }>; idChecklists: string[];
+          dateLastActivity: string; badges: { checkItems: number; checkItemsChecked: number; comments: number };
+        }>,
+      ];
 
       const listMap = new Map(lists.map((l) => [l.id, l.name]));
-
-      const snapshot = {
-        board: {
-          id: config.boardId,
-          name: "Jeeves Task Queue",
-          url: `https://trello.com/b/${config.boardId}`,
-        },
+      respond(true, {
+        board: { id: config.boardId, name: "Jeeves Task Queue", url: `https://trello.com/b/${config.boardId}` },
         lists: lists.map((l) => ({ id: l.id, name: l.name, closed: l.closed })),
         cards: cards.map((c) => ({
-          id: c.id,
-          name: c.name,
-          desc: c.desc ?? "",
-          url: c.url,
-          listId: c.idList,
-          listName: listMap.get(c.idList) ?? null,
-          labels: c.labels.map((l) => l.name),
-          labelIds: c.labels.map((l) => l.id),
+          id: c.id, name: c.name, desc: c.desc ?? "", url: c.url,
+          listId: c.idList, listName: listMap.get(c.idList) ?? null,
+          labels: c.labels.map((l) => l.name), labelIds: c.labels.map((l) => l.id),
           hasChecklists: (c.idChecklists?.length ?? 0) > 0,
-          checkItems: c.badges?.checkItems ?? 0,
-          checkItemsChecked: c.badges?.checkItemsChecked ?? 0,
-          commentCount: c.badges?.comments ?? 0,
-          dateLastActivity: c.dateLastActivity,
+          checkItems: c.badges?.checkItems ?? 0, checkItemsChecked: c.badges?.checkItemsChecked ?? 0,
+          commentCount: c.badges?.comments ?? 0, dateLastActivity: c.dateLastActivity,
         })),
+        source: "trello",
         fetchedAt: Date.now(),
-      };
-
-      respond(true, snapshot);
+      });
     } catch (err) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to fetch task queue: ${String(err)}`),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to fetch: ${String(err)}`));
     }
   },
 
+  /**
+   * Card detail — reads from DB, falls back to Trello.
+   */
   "taskQueue.cardDetail": async ({ params, respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
@@ -225,87 +205,98 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
       return;
     }
 
+    const db = getTasksDb();
+    if (db) {
+      try {
+        const card = getCard(db, cardId);
+        if (card) {
+          const checklists = getChecklists(db, cardId);
+          const comments = getComments(db, cardId, 20);
+
+          let labels: Array<{ id: string; name: string; color?: string }> = [];
+          try { labels = JSON.parse(card.labels || "[]"); } catch {}
+
+          respond(true, {
+            card: {
+              id: card.id,
+              name: card.name,
+              desc: card.description,
+              idList: card.list_id,
+              url: card.url || `https://trello.com/c/${card.id}`,
+              labels,
+              dateLastActivity: card.updated_at,
+            },
+            comments: comments.map((c) => ({
+              id: c.id,
+              date: c.created_at,
+              text: c.text,
+              author: c.author,
+            })),
+            checklists: checklists.map((cl) => ({
+              id: cl.id,
+              name: cl.name,
+              items: cl.checkItems.map((ci) => ({
+                id: ci.id,
+                name: ci.name,
+                complete: ci.state === "complete",
+              })),
+            })),
+            source: "db",
+          });
+          return;
+        }
+      } catch (err) {
+        console.error("DB cardDetail failed, falling back to Trello:", err);
+      }
+    }
+
+    // Fallback: Trello API
     try {
       const [card, actions, checklists] = await Promise.all([
-        fetchTrello(
-          `/cards/${cardId}?fields=name,desc,idList,url,labels,dateLastActivity`,
-          config.apiKey,
-          config.apiToken,
-        ) as Promise<Record<string, unknown>>,
-        fetchTrello(
-          `/cards/${cardId}/actions?filter=commentCard&limit=20`,
-          config.apiKey,
-          config.apiToken,
-        ) as Promise<
-          Array<{
-            id: string;
-            date: string;
-            data: { text: string };
-            memberCreator: { fullName: string };
-          }>
-        >,
-        fetchTrello(`/cards/${cardId}/checklists`, config.apiKey, config.apiToken) as Promise<
-          Array<{
-            id: string;
-            name: string;
-            checkItems: Array<{
-              id: string;
-              name: string;
-              state: string;
-            }>;
-          }>
-        >,
+        fetch(trelloUrl(`/cards/${cardId}?fields=name,desc,idList,url,labels,dateLastActivity`, config.apiKey, config.apiToken)).then((r) => r.json()),
+        fetch(trelloUrl(`/cards/${cardId}/actions?filter=commentCard&limit=20`, config.apiKey, config.apiToken)).then((r) => r.json()),
+        fetch(trelloUrl(`/cards/${cardId}/checklists`, config.apiKey, config.apiToken)).then((r) => r.json()),
       ]);
 
       respond(true, {
         card,
-        comments: actions.map((a) => ({
-          id: a.id,
-          date: a.date,
-          text: a.data.text,
-          author: a.memberCreator.fullName,
+        comments: (actions as Array<{ id: string; date: string; data: { text: string }; memberCreator: { fullName: string } }>).map((a) => ({
+          id: a.id, date: a.date, text: a.data.text, author: a.memberCreator.fullName,
         })),
-        checklists: checklists.map((cl) => ({
-          id: cl.id,
-          name: cl.name,
-          items: cl.checkItems.map((ci) => ({
-            id: ci.id,
-            name: ci.name,
-            complete: ci.state === "complete",
-          })),
+        checklists: (checklists as Array<{ id: string; name: string; checkItems: Array<{ id: string; name: string; state: string }> }>).map((cl) => ({
+          id: cl.id, name: cl.name,
+          items: cl.checkItems.map((ci) => ({ id: ci.id, name: ci.name, complete: ci.state === "complete" })),
         })),
+        source: "trello",
       });
     } catch (err) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to fetch card: ${String(err)}`),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to fetch card: ${String(err)}`));
     }
   },
+
+  // ── Write operations: Trello API + DB update ───────────────
 
   "taskQueue.moveCard": async ({ params, respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
     const { cardId, listId } = params as { cardId?: string; listId?: string };
     if (!cardId || !listId) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, "cardId and listId required"),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "cardId and listId required"));
       return;
     }
 
     try {
       await putTrello(`/cards/${cardId}`, config.apiKey, config.apiToken, { idList: listId });
+      // Update DB
+      const wdb = getTasksDbWritable();
+      if (wdb) {
+        wdb.prepare("UPDATE cards SET list_id=? WHERE id=?").run(listId, cardId);
+        wdb.close();
+        refreshTasksDb();
+      }
       respond(true, { ok: true });
     } catch (err) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to move card: ${String(err)}`),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to move card: ${String(err)}`));
     }
   },
 
@@ -319,39 +310,32 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     }
 
     try {
-      // Add approved label (ignore if already present)
       if (config.approvedLabelId) {
         await postTrello(`/cards/${cardId}/idLabels`, config.apiKey, config.apiToken, {
           value: config.approvedLabelId,
         }).catch(() => {});
       }
-      // Remove "New" label
       if (config.newLabelId) {
-        await deleteTrello(
-          `/cards/${cardId}/idLabels/${config.newLabelId}`,
-          config.apiKey,
-          config.apiToken,
-        ).catch(() => {});
+        await deleteTrello(`/cards/${cardId}/idLabels/${config.newLabelId}`, config.apiKey, config.apiToken).catch(() => {});
       }
-      // Find the Approved list
-      const lists = (await fetchTrello(
-        `/boards/${config.boardId}/lists?fields=name`,
-        config.apiKey,
-        config.apiToken,
-      )) as Array<{ id: string; name: string }>;
-      const approvedList = lists.find((l) => l.name === "Approved");
-      if (approvedList) {
-        await putTrello(`/cards/${cardId}`, config.apiKey, config.apiToken, {
-          idList: approvedList.id,
-        });
+      // Move to Approved list
+      const db = getTasksDb();
+      const approvedList = db
+        ? (db.prepare("SELECT id FROM lists WHERE board_id=? AND name='Approved'").all(config.boardId) as Array<{ id: string }>)[0]
+        : null;
+      const approvedListId = approvedList?.id;
+      if (approvedListId) {
+        await putTrello(`/cards/${cardId}`, config.apiKey, config.apiToken, { idList: approvedListId });
+        const wdb = getTasksDbWritable();
+        if (wdb) {
+          wdb.prepare("UPDATE cards SET list_id=? WHERE id=?").run(approvedListId, cardId);
+          wdb.close();
+          refreshTasksDb();
+        }
       }
       respond(true, { ok: true });
     } catch (err) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to approve card: ${String(err)}`),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to approve card: ${String(err)}`));
     }
   },
 
@@ -365,47 +349,44 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     }
 
     try {
-      await postTrello(`/cards/${cardId}/actions/comments`, config.apiKey, config.apiToken, {
-        text,
-      });
+      const result = await postTrello(`/cards/${cardId}/actions/comments`, config.apiKey, config.apiToken, { text });
+      // Also write to DB
+      const wdb = getTasksDbWritable();
+      if (wdb && result && typeof result === "object" && "id" in result) {
+        wdb.prepare("INSERT OR IGNORE INTO comments (id, card_id, text, author, created_at, synced_at) VALUES (?,?,?,?,datetime('now'),datetime('now'))").run(
+          (result as { id: string }).id, cardId, text, "Jeeves", 
+        );
+        wdb.close();
+        refreshTasksDb();
+      }
       respond(true, { ok: true });
     } catch (err) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to add comment: ${String(err)}`),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to add comment: ${String(err)}`));
     }
   },
 
   "taskQueue.toggleCheckItem": async ({ params, respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
-    const { cardId, checkItemId, complete } = params as {
-      cardId?: string;
-      checkItemId?: string;
-      complete?: boolean;
-    };
+    const { cardId, checkItemId, complete } = params as { cardId?: string; checkItemId?: string; complete?: boolean };
     if (!cardId || !checkItemId) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, "cardId and checkItemId required"),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "cardId and checkItemId required"));
       return;
     }
 
     try {
-      await putTrello(`/cards/${cardId}/checkItem/${checkItemId}`, config.apiKey, config.apiToken, {
-        state: complete ? "complete" : "incomplete",
-      });
+      const state = complete ? "complete" : "incomplete";
+      await putTrello(`/cards/${cardId}/checkItem/${checkItemId}`, config.apiKey, config.apiToken, { state });
+      // Update DB
+      const wdb = getTasksDbWritable();
+      if (wdb) {
+        wdb.prepare("UPDATE checklist_items SET state=? WHERE id=? AND card_id=?").run(state, checkItemId, cardId);
+        wdb.close();
+        refreshTasksDb();
+      }
       respond(true, { ok: true });
     } catch (err) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to toggle check item: ${String(err)}`),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to toggle check item: ${String(err)}`));
     }
   },
 
@@ -420,22 +401,31 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
 
     try {
       if (config.newLabelId) {
-        await deleteTrello(
-          `/cards/${cardId}/idLabels/${config.newLabelId}`,
-          config.apiKey,
-          config.apiToken,
-        ).catch(() => {});
+        await deleteTrello(`/cards/${cardId}/idLabels/${config.newLabelId}`, config.apiKey, config.apiToken).catch(() => {});
+        // Update labels in DB
+        const wdb = getTasksDbWritable();
+        if (wdb) {
+          const row = wdb.prepare("SELECT labels FROM cards WHERE id=?").all(cardId);
+          if (row.length > 0) {
+            try {
+              const labels = JSON.parse((row[0] as { labels: string }).labels || "[]");
+              const filtered = labels.filter((l: { id: string }) => l.id !== config.newLabelId);
+              wdb.prepare("UPDATE cards SET labels=? WHERE id=?").run(JSON.stringify(filtered), cardId);
+            } catch {}
+          }
+          wdb.close();
+          refreshTasksDb();
+        }
       }
       respond(true, { ok: true });
     } catch (err) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to mark seen: ${String(err)}`),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to mark seen: ${String(err)}`));
     }
   },
 
+  /**
+   * Card metrics — reads from tasks.sqlite activity table + usage_costs.sqlite.
+   */
   "taskQueue.cardMetrics": ({ params, respond }) => {
     const { cardId } = params as { cardId?: string };
     if (!cardId) {
@@ -443,43 +433,50 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const windows = getCardTimeWindows(cardId);
+    // Get time windows from activity DB instead of .jsonl
+    const tasksDb = getTasksDb();
+    const windows: Array<{ start: string; end: string | null }> = [];
+
+    if (tasksDb) {
+      const entries = tasksDb.prepare(
+        "SELECT ts, category, card_id FROM activity WHERE category IN ('task', 'done') ORDER BY ts ASC"
+      ).all() as Array<{ ts: string; category: string; card_id: string | null }>;
+
+      let currentStart: string | null = null;
+      for (const entry of entries) {
+        if (entry.category === "task" && entry.card_id === cardId) {
+          currentStart = entry.ts;
+        } else if (currentStart && entry.category === "task" && entry.card_id !== cardId) {
+          windows.push({ start: currentStart, end: entry.ts });
+          currentStart = null;
+        } else if (currentStart && entry.category === "done" && entry.card_id === cardId) {
+          windows.push({ start: currentStart, end: entry.ts });
+          currentStart = null;
+        }
+      }
+      if (currentStart) windows.push({ start: currentStart, end: null });
+    }
+
     if (windows.length === 0) {
       respond(true, {
-        cardId,
-        windows: [],
-        totalCost: 0,
-        totalEvents: 0,
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        totalCacheTokens: 0,
-        totalDurationMin: 0,
-        byModel: [],
-        fetchedAt: Date.now(),
+        cardId, windows: [], totalCost: 0, totalEvents: 0,
+        totalInputTokens: 0, totalOutputTokens: 0, totalCacheTokens: 0,
+        totalDurationMin: 0, byModel: [], fetchedAt: Date.now(),
       });
       return;
     }
 
-    const db = getCostDb();
-    if (!db) {
+    const costDb = getCostDb();
+    if (!costDb) {
       respond(true, {
-        cardId,
-        windows,
-        totalCost: 0,
-        totalEvents: 0,
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        totalCacheTokens: 0,
-        totalDurationMin: 0,
-        byModel: [],
-        noDb: true,
-        fetchedAt: Date.now(),
+        cardId, windows, totalCost: 0, totalEvents: 0,
+        totalInputTokens: 0, totalOutputTokens: 0, totalCacheTokens: 0,
+        totalDurationMin: 0, byModel: [], noDb: true, fetchedAt: Date.now(),
       });
       return;
     }
 
     try {
-      // Build a UNION of time window conditions
       const conditions = windows.map((w) => {
         const start = w.start.replace(/'/g, "''");
         if (w.end) {
@@ -488,30 +485,28 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
         }
         return `(ts >= '${start}')`;
       });
-      const whereClause = conditions.join(" OR ");
+      const where = conditions.join(" OR ");
 
-      const summary = db.prepare(
+      const summary = costDb.prepare(
         `SELECT COUNT(*) as events, ROUND(COALESCE(SUM(cost_total), 0), 4) as cost,
           COALESCE(SUM(input_tokens), 0) as input_tokens,
           COALESCE(SUM(output_tokens), 0) as output_tokens,
           COALESCE(SUM(cache_read), 0) as cache_tokens,
           MIN(ts) as first_event, MAX(ts) as last_event
-         FROM usage_events WHERE ${whereClause}`,
+         FROM usage_events WHERE ${where}`
       ).all();
 
-      const byModel = db.prepare(
+      const byModel = costDb.prepare(
         `SELECT model, COUNT(*) as events, ROUND(SUM(cost_total), 4) as cost,
           SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens
-         FROM usage_events WHERE (${whereClause})
+         FROM usage_events WHERE (${where})
          AND model NOT IN ('unknown', 'delivery-mirror')
-         GROUP BY model ORDER BY cost DESC`,
+         GROUP BY model ORDER BY cost DESC`
       ).all();
 
-      db.close();
+      costDb.close();
 
       const s = (summary[0] ?? {}) as Record<string, unknown>;
-
-      // Calculate total active time from windows
       let totalDurationMs = 0;
       for (const w of windows) {
         const start = new Date(w.start).getTime();
@@ -522,12 +517,8 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
       respond(true, {
         cardId,
         windows: windows.map((w) => ({
-          start: w.start,
-          end: w.end,
-          durationMin: Math.round(
-            ((w.end ? new Date(w.end).getTime() : Date.now()) - new Date(w.start).getTime()) /
-              60000,
-          ),
+          start: w.start, end: w.end,
+          durationMin: Math.round(((w.end ? new Date(w.end).getTime() : Date.now()) - new Date(w.start).getTime()) / 60000),
         })),
         totalCost: Number(s.cost ?? 0),
         totalEvents: Number(s.events ?? 0),
@@ -541,12 +532,8 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
         fetchedAt: Date.now(),
       });
     } catch (err) {
-      try { db.close(); } catch {}
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INTERNAL_ERROR, `Card metrics query failed: ${String(err)}`),
-      );
+      try { costDb.close(); } catch {}
+      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Card metrics query failed: ${String(err)}`));
     }
   },
 };
