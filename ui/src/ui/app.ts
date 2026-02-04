@@ -266,6 +266,10 @@ export class OpenClawApp extends LitElement {
   @state() cronRuns: CronRunLogEntry[] = [];
   @state() cronBusy = false;
 
+  @state() swarmLoading = false;
+  @state() swarmHierarchy: any = null;
+  @state() swarmError: string | null = null;
+
   @state() taskQueueLoading = false;
   @state() taskQueueSnapshot: TaskQueueSnapshot | null = null;
   @state() taskQueueError: string | null = null;
@@ -486,6 +490,19 @@ export class OpenClawApp extends LitElement {
 
   async loadCron() {
     await loadCronInternal(this as unknown as Parameters<typeof loadCronInternal>[0]);
+  }
+
+  async loadSwarmHierarchy() {
+    if (!this.client || !this.connected) return;
+    this.swarmLoading = true;
+    this.swarmError = null;
+    try {
+      this.swarmHierarchy = await this.client.request("swarm.hierarchy", {});
+    } catch (err: any) {
+      this.swarmError = err?.message ?? String(err);
+    } finally {
+      this.swarmLoading = false;
+    }
   }
 
   async loadTaskQueue() {

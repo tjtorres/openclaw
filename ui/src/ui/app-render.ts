@@ -72,6 +72,7 @@ import { renderOverview } from "./views/overview.ts";
 import { renderNotifications } from "./views/notifications.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
+import { renderSwarm } from "./views/swarm.ts";
 import { renderTaskQueue } from "./views/task-queue.ts";
 
 const AVATAR_DATA_RE = /^data:/i;
@@ -414,6 +415,17 @@ export function renderApp(state: AppViewState) {
                 error: state.notificationsError,
                 onAction: (action, params) => state.handleNotificationAction(action, params),
                 onRefresh: () => state.loadNotifications(),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "swarm"
+            ? renderSwarm({
+                loading: state.swarmLoading,
+                hierarchy: state.swarmHierarchy,
+                error: state.swarmError,
+                onRefresh: () => state.loadSwarmHierarchy(),
               })
             : nothing
         }

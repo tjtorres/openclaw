@@ -210,6 +210,10 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "cron") {
     await loadCron(host);
   }
+  if (host.tab === "swarm") {
+    const app = host as unknown as OpenClawApp;
+    await app.loadSwarmHierarchy();
+  }
   if (host.tab === "task-queue") {
     const app = host as unknown as OpenClawApp;
     await app.loadTaskQueue();

@@ -5,6 +5,7 @@
  */
 import type { GatewayRequestHandlers } from "./types.js";
 import { getTasksDb, getChecklistProgress } from "./tasks-db.js";
+import { sendPush } from "./push.js";
 
 export type Notification = {
   id: string;
@@ -45,6 +46,9 @@ function extractSummary(desc: string | null, maxLen = 180): string {
 
 /** Track which notification IDs have been dismissed/seen. In-memory is fine — resets on gateway restart. */
 const seenNotifications = new Set<string>();
+
+/** Track which cards have already had a push notification sent (prevent duplicates). */
+const pushedNotifications = new Set<string>();
 
 export const notificationsHandlers: GatewayRequestHandlers = {
   "notifications.dismiss": ({ params, respond }) => {
@@ -90,6 +94,15 @@ export const notificationsHandlers: GatewayRequestHandlers = {
       const summary = extractSummary(card.description) || "New task proposal — review and approve to start work.";
 
       const notifId = `proposal-${card.id}`;
+
+      // Send push for new proposals (first time only)
+      if (!pushedNotifications.has(notifId) && !seenNotifications.has(notifId)) {
+        pushedNotifications.add(notifId);
+        void sendPush("📋 New Proposal", card.name, "proposal", card.id, [
+          { label: "Approve", action: "taskQueue.approveCard", params: { cardId: card.id } },
+        ]);
+      }
+
       notifications.push({
         id: notifId,
         type: "proposal",
@@ -137,6 +150,13 @@ export const notificationsHandlers: GatewayRequestHandlers = {
       const progress = getChecklistProgress(db, card.id);
 
       const blockedNotifId = `blocked-${card.id}`;
+
+      // Send push for new blocked cards (first time only)
+      if (!pushedNotifications.has(blockedNotifId) && !seenNotifications.has(blockedNotifId)) {
+        pushedNotifications.add(blockedNotifId);
+        void sendPush("🚧 Card Blocked", card.name, "blocked", card.id);
+      }
+
       notifications.push({
         id: blockedNotifId,
         type: "blocked",

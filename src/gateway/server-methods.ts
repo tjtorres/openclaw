@@ -29,6 +29,8 @@ import { systemHandlers } from "./server-methods/system.js";
 import { talkHandlers } from "./server-methods/talk.js";
 import { sprintHandlers } from "./server-methods/sprints.js";
 import { taskQueueHandlers } from "./server-methods/task-queue.js";
+import { swarmHandlers } from "./server-methods/swarm.js";
+import { trustHandlers } from "./server-methods/trust.js";
 import { ttsHandlers } from "./server-methods/tts.js";
 import { updateHandlers } from "./server-methods/update.js";
 import { usageHandlers } from "./server-methods/usage.js";
@@ -197,6 +199,8 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...browserHandlers,
   ...sprintHandlers,
   ...taskQueueHandlers,
+  ...swarmHandlers,
+  ...trustHandlers,
   ...metricsHandlers,
   ...issuesHandlers,
   ...notificationsHandlers,

@@ -8,6 +8,7 @@ import type { GatewayRequestHandlers } from "./types.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
 import { getProvider } from "./task-provider.js";
 import { getTasksDb } from "./tasks-db.js";
+import { sendPush } from "./push.js";
 
 /** Wrap an RPC handler with catch-all error boundary. */
 function safe(
@@ -83,6 +84,25 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
       }
     }
     const result = await provider.moveCard(cardId, listId);
+
+    // Push notification when cards land in key lists
+    try {
+      const db = getTasksDb();
+      if (db) {
+        const card = db.prepare("SELECT name FROM cards WHERE id=?").get(cardId) as { name?: string } | undefined;
+        const list = db.prepare("SELECT name FROM lists WHERE id=?").get(listId) as { name?: string } | undefined;
+        const cardName = card?.name ?? "Card";
+        const listName = list?.name ?? "";
+        if (listName === "Proposed") {
+          void sendPush("📋 New Proposal", cardName, "proposal", cardId, [
+            { label: "Approve", action: "taskQueue.approveCard", params: { cardId } },
+          ]);
+        } else if (listName === "Blocked") {
+          void sendPush("🚧 Card Blocked", cardName, "blocked", cardId);
+        }
+      }
+    } catch { /* push is best-effort */ }
+
     respond(true, result);
   }),
 
@@ -95,6 +115,14 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
       return;
     }
     const result = await provider.approveCard(cardId);
+
+    // Notify that card was approved
+    try {
+      const db = getTasksDb();
+      const card = db?.prepare("SELECT name FROM cards WHERE id=?").get(cardId) as { name?: string } | undefined;
+      void sendPush("✅ Card Approved", card?.name ?? "Card", "alert", cardId);
+    } catch { /* best-effort */ }
+
     respond(true, result);
   }),
 
