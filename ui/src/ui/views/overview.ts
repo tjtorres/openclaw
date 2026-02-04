@@ -18,6 +18,16 @@ export type PermissionsSummary = {
   totalGranted: number;
   totalDenied: number;
   configured: boolean;
+  escalation?: Record<string, string>;
+};
+
+export type PermissionsAuditEntry = {
+  ts: string;
+  capability: string;
+  granted: boolean;
+  level: number;
+  role: string;
+  context: string;
 };
 
 export type SwarmWorkerInfo = {
@@ -97,7 +107,18 @@ export function setAutoRunToggleHandler(handler: (enabled: boolean) => void) {
   _onToggleAutoRun = handler;
 }
 
-function renderPermissionsWidget(perms: PermissionsSummary | null) {
+const CAPABILITY_ICONS: Record<string, string> = {
+  "email": "📧", "calendar": "📅", "code": "💻", "infra": "🏗️",
+  "messaging": "💬", "social": "📱", "finance": "💰", "data": "📊",
+  "external": "🌐", "browser": "🔍", "files": "📁", "system": "⚙️",
+};
+
+function capIcon(cap: string): string {
+  const domain = cap.split(".")[0];
+  return CAPABILITY_ICONS[domain] || "🔧";
+}
+
+function renderPermissionsWidget(perms: PermissionsSummary | null, auditEntries?: PermissionsAuditEntry[], todayCost?: number) {
   if (!perms || !perms.configured) {
     return html`<div class="card" style="padding: 12px 16px">
       <div class="ov-widget-title">Autonomy</div>
@@ -107,6 +128,12 @@ function renderPermissionsWidget(perms: PermissionsSummary | null) {
 
   const levelColor = LEVEL_COLORS[perms.level] || "#78909c";
   const pct = Math.round((perms.totalGranted / (perms.totalGranted + perms.totalDenied)) * 100);
+  const budgetPct = todayCost != null && perms.budgetPerDay > 0
+    ? Math.min(100, Math.round((todayCost / perms.budgetPerDay) * 100))
+    : null;
+  const budgetColor = budgetPct != null
+    ? (budgetPct > 90 ? "#ef5350" : budgetPct > 70 ? "#ffa726" : "#66bb6a")
+    : "#66bb6a";
 
   return html`
     <style>
@@ -130,8 +157,8 @@ function renderPermissionsWidget(perms: PermissionsSummary | null) {
         font-size: 12px; font-weight: 600;
       }
       .ov-perms-stats {
-        display: grid; grid-template-columns: repeat(3, 1fr);
-        gap: 12px; margin-bottom: 10px;
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        gap: 10px; margin-bottom: 10px;
       }
       .ov-perms-stat-label { font-size: 11px; color: var(--text-muted); }
       .ov-perms-stat-value { font-size: 14px; font-weight: 600; text-transform: capitalize; }
@@ -139,7 +166,12 @@ function renderPermissionsWidget(perms: PermissionsSummary | null) {
         height: 4px; background: var(--bg-hover, rgba(255,255,255,0.08));
         border-radius: 2px; overflow: hidden;
       }
-      .ov-perms-bar-fill { height: 100%; border-radius: 2px; }
+      .ov-perms-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+      .ov-perms-budget-bar {
+        height: 6px; background: var(--bg-hover, rgba(255,255,255,0.08));
+        border-radius: 3px; overflow: hidden; margin-top: 4px;
+      }
+      .ov-perms-budget-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
       .ov-perms-epochs {
         margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;
       }
@@ -147,10 +179,34 @@ function renderPermissionsWidget(perms: PermissionsSummary | null) {
         font-size: 11px; padding: 1px 8px; border-radius: 8px;
         background: rgba(255,255,255,0.06); color: var(--text-muted);
       }
+      .ov-caps-grid {
+        display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px;
+      }
+      .ov-cap {
+        font-size: 10px; padding: 2px 6px; border-radius: 4px;
+        display: flex; align-items: center; gap: 3px;
+      }
+      .ov-cap--granted {
+        background: rgba(102,187,106,0.12); color: #66bb6a;
+        border: 1px solid rgba(102,187,106,0.2);
+      }
+      .ov-cap--denied {
+        background: rgba(239,83,80,0.08); color: #ef5350;
+        border: 1px solid rgba(239,83,80,0.15); opacity: 0.6;
+      }
+      .ov-audit { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+      .ov-audit-entry {
+        display: flex; gap: 8px; align-items: center;
+        font-size: 11px; padding: 3px 0;
+      }
+      .ov-audit-granted { color: #66bb6a; }
+      .ov-audit-denied { color: #ef5350; }
+      .ov-audit-ts { color: var(--text-muted); font-size: 10px; margin-left: auto; }
       @media (max-width: 600px) {
-        .ov-perms-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .ov-perms-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
         .ov-perms-stat-value { font-size: 13px; }
         .ov-perms-header { flex-direction: column; align-items: flex-start; }
+        .ov-cap { font-size: 9px; }
       }
       @media (max-width: 400px) {
         .ov-perms-stats { grid-template-columns: 1fr 1fr; }
@@ -182,13 +238,40 @@ function renderPermissionsWidget(perms: PermissionsSummary | null) {
           <div class="ov-perms-stat-label">Capabilities</div>
           <div class="ov-perms-stat-value">${perms.totalGranted}/${perms.totalGranted + perms.totalDenied}</div>
         </div>
+        ${todayCost != null ? html`
+          <div>
+            <div class="ov-perms-stat-label">Today's Spend</div>
+            <div class="ov-perms-stat-value" style="color: ${budgetColor}">$${todayCost.toFixed(2)}</div>
+          </div>
+        ` : nothing}
       </div>
       <div class="ov-perms-bar">
         <div class="ov-perms-bar-fill" style="width: ${pct}%; background: ${levelColor}"></div>
       </div>
+      ${budgetPct != null ? html`
+        <div class="ov-perms-budget-bar" title="$${todayCost?.toFixed(2)} of $${perms.budgetPerDay} daily budget (${budgetPct}%)">
+          <div class="ov-perms-budget-fill" style="width: ${budgetPct}%; background: ${budgetColor}"></div>
+        </div>
+      ` : nothing}
       ${perms.approvedEpochs.length > 0 ? html`
         <div class="ov-perms-epochs">
           ${perms.approvedEpochs.map((e) => html`<span class="ov-perms-epoch">${e}</span>`)}
+        </div>
+      ` : nothing}
+      <div class="ov-caps-grid">
+        ${perms.granted.slice(0, 12).map((c) => html`<span class="ov-cap ov-cap--granted" title="${c}">${capIcon(c)} ${c.split(".").pop()}</span>`)}
+        ${perms.denied.slice(0, 8).map((c) => html`<span class="ov-cap ov-cap--denied" title="${c}">${capIcon(c)} ${c.split(".").pop()}</span>`)}
+      </div>
+      ${auditEntries && auditEntries.length > 0 ? html`
+        <div class="ov-audit">
+          <div class="ov-widget-title" style="margin-bottom: 4px">Recent Audit</div>
+          ${auditEntries.slice(0, 5).map((e) => html`
+            <div class="ov-audit-entry">
+              <span class="${e.granted ? 'ov-audit-granted' : 'ov-audit-denied'}">${e.granted ? '✓' : '✗'}</span>
+              <span>${e.capability}</span>
+              <span class="ov-audit-ts">${formatAgo(new Date(e.ts).getTime())}</span>
+            </div>
+          `)}
         </div>
       ` : nothing}
     </div>
@@ -239,6 +322,8 @@ export type OverviewProps = {
   agentSession: string | null;
   workStatus: WorkStatusData | null;
   permissions: PermissionsSummary | null;
+  permissionsAudit: PermissionsAuditEntry[];
+  todayCost: number | null;
   swarmStatus: SwarmStatusData | null;
   onSettingsChange: (next: UiSettings) => void;
   onPasswordChange: (next: string) => void;
@@ -542,7 +627,7 @@ export function renderOverview(props: OverviewProps) {
     </section>
 
     <section style="margin-top: 18px;">
-      ${renderPermissionsWidget(props.permissions)}
+      ${renderPermissionsWidget(props.permissions, props.permissionsAudit, props.todayCost ?? undefined)}
     </section>
 
     ${props.swarmStatus?.hasActive ? html`

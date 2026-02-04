@@ -112,6 +112,7 @@ const BASE_METHODS = [
   "notifications.dismissAll",
   // Permissions
   "permissions.summary",
+  "permissions.audit",
   "permissions.toggleAutoRun",
   "permissions.killSwitch",
   // Swarm

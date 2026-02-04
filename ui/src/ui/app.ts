@@ -288,6 +288,8 @@ export class OpenClawApp extends LitElement {
   @state() workStatus: WorkStatusData | null = null;
   private workStatusPollTimer: number | null = null;
   @state() permissionsData: import("./views/overview.ts").PermissionsSummary | null = null;
+  @state() permissionsAudit: import("./views/overview.ts").PermissionsAuditEntry[] = [];
+  @state() todayCost: number | null = null;
   @state() swarmStatusData: import("./views/overview.ts").SwarmStatusData | null = null;
   @state() notificationsData: import("./views/notifications.ts").NotificationsData | null = null;
   @state() notificationsLoading = false;
@@ -597,6 +599,13 @@ export class OpenClawApp extends LitElement {
     if (!this.client || !this.connected) return;
     try {
       this.permissionsData = await this.client.request<import("./views/overview.ts").PermissionsSummary>("permissions.summary", {});
+      // Load audit entries + today's cost (non-blocking)
+      this.client.request<{ entries: import("./views/overview.ts").PermissionsAuditEntry[] }>("permissions.audit", { limit: 10 })
+        .then((r) => { this.permissionsAudit = r.entries; })
+        .catch(() => {});
+      this.client.request<{ todayCost: number }>("metrics.overview", {})
+        .then((r: any) => { if (r?.todayCost != null) this.todayCost = r.todayCost; else if (r?.costToday != null) this.todayCost = r.costToday; })
+        .catch(() => {});
     } catch {
       // Not available — OK
     }

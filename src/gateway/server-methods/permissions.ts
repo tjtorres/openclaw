@@ -129,4 +129,33 @@ export const permissionsHandlers: GatewayRequestHandlers = {
       configured: true,
     });
   },
+
+  /** Recent permission audit entries from the DB. */
+  "permissions.audit": ({ params, respond }) => {
+    try {
+      const { getTasksDb } = require("./tasks-db.js");
+      const db = getTasksDb();
+      if (!db) {
+        respond(true, { entries: [], hasDb: false });
+        return;
+      }
+      const limit = (params as { limit?: number }).limit || 20;
+      const rows = db.prepare(
+        "SELECT ts, capability, granted, level, role, context FROM permission_audit ORDER BY ts DESC LIMIT ?"
+      ).all(limit) as Array<{ ts: string; capability: string; granted: number; level: number; role: string; context: string }>;
+      respond(true, {
+        entries: rows.map((r) => ({
+          ts: r.ts,
+          capability: r.capability,
+          granted: !!r.granted,
+          level: r.level,
+          role: r.role,
+          context: r.context,
+        })),
+        hasDb: true,
+      });
+    } catch (err) {
+      respond(false, undefined, { code: -1, message: String(err) });
+    }
+  },
 };
