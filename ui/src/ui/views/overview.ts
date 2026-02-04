@@ -1,9 +1,33 @@
-import { html } from "lit";
+import { html, nothing } from "lit";
 import type { GatewayHelloOk } from "../gateway.ts";
 import type { UiSettings } from "../storage.ts";
 import { formatAgo, formatDurationMs } from "../format.ts";
 import { formatNextRun } from "../presenter.ts";
 import { renderActivityFeed, type ActivityFeedData } from "./activity-feed.ts";
+
+export type WorkStatusData = {
+  currentTask: {
+    cardId: string;
+    cardName: string;
+    startedAt: string;
+  } | null;
+  progress: {
+    total: number;
+    done: number;
+    pct: number;
+    items: Array<{ name: string; done: boolean }>;
+  } | null;
+  recentStatus: Array<{
+    ts: string;
+    icon: string;
+    message: string;
+    category: string;
+    cardId: string | null;
+  }>;
+  summary: string;
+  isIdle: boolean;
+  fetchedAt: number;
+};
 
 export type OverviewProps = {
   connected: boolean;
@@ -22,12 +46,90 @@ export type OverviewProps = {
   agentStatus: "idle" | "working";
   agentLastEvent: number;
   agentSession: string | null;
+  workStatus: WorkStatusData | null;
   onSettingsChange: (next: UiSettings) => void;
   onPasswordChange: (next: string) => void;
   onSessionKeyChange: (next: string) => void;
   onConnect: () => void;
   onRefresh: () => void;
 };
+
+function renderWorkStatus(ws: WorkStatusData | null) {
+  if (!ws) return nothing;
+
+  const statusIndicator = ws.isIdle
+    ? html`<span style="color: var(--text-muted)">⏸ Idle</span>`
+    : html`<span style="color: var(--accent, #4caf50)">● Active</span>`;
+
+  const progressBar = ws.progress
+    ? html`
+        <div style="margin-top: 8px">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px">
+            <span>${ws.progress.done}/${ws.progress.total} items</span>
+            <span>${ws.progress.pct}%</span>
+          </div>
+          <div style="height: 6px; background: var(--bg-hover); border-radius: 3px; overflow: hidden">
+            <div style="height: 100%; width: ${ws.progress.pct}%; background: var(--accent, #4caf50); border-radius: 3px; transition: width 0.3s"></div>
+          </div>
+        </div>
+      `
+    : nothing;
+
+  const checklistItems = ws.progress?.items
+    ? html`
+        <div style="margin-top: 8px; font-size: 12px; max-height: 120px; overflow-y: auto">
+          ${ws.progress.items.map(
+            (item) => html`
+              <div style="padding: 2px 0; display: flex; gap: 6px; align-items: baseline">
+                <span style="flex-shrink: 0">${item.done ? "✅" : "⬜"}</span>
+                <span style="${item.done ? "text-decoration: line-through; opacity: 0.5" : ""}">${item.name}</span>
+              </div>
+            `,
+          )}
+        </div>
+      `
+    : nothing;
+
+  const statusFeed = ws.recentStatus.length > 0
+    ? html`
+        <div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px">Live Feed</div>
+          ${ws.recentStatus.slice(0, 6).map(
+            (s) => html`
+              <div style="padding: 3px 0; font-size: 12px; display: flex; gap: 6px; align-items: baseline">
+                <span style="flex-shrink: 0">${s.icon}</span>
+                <span style="flex: 1; word-break: break-word">${s.message}</span>
+                <span style="flex-shrink: 0; color: var(--text-muted); font-size: 11px">${formatAgo(new Date(s.ts).getTime())}</span>
+              </div>
+            `,
+          )}
+        </div>
+      `
+    : nothing;
+
+  return html`
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div class="card-title">Agent Work Status</div>
+        ${statusIndicator}
+      </div>
+      <div style="margin-top: 6px; font-size: 14px; line-height: 1.4">
+        ${ws.summary}
+      </div>
+      ${ws.currentTask
+        ? html`
+            <div style="margin-top: 6px; font-size: 12px; color: var(--text-muted)">
+              Task: <strong>${ws.currentTask.cardName}</strong>
+              · Started ${formatAgo(new Date(ws.currentTask.startedAt).getTime())}
+            </div>
+          `
+        : nothing}
+      ${progressBar}
+      ${checklistItems}
+      ${statusFeed}
+    </div>
+  `;
+}
 
 export function renderOverview(props: OverviewProps) {
   const snapshot = props.hello?.snapshot as
@@ -244,6 +346,10 @@ export function renderOverview(props: OverviewProps) {
         </div>
         <div class="muted">Next wake ${formatNextRun(props.cronNext)}</div>
       </div>
+    </section>
+
+    <section style="margin-top: 18px;">
+      ${renderWorkStatus(props.workStatus)}
     </section>
 
     <section style="margin-top: 18px;">

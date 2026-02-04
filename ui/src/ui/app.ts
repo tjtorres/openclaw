@@ -40,6 +40,7 @@ import type {
   NostrProfile,
 } from "./types.ts";
 import type { ActivityFeedData } from "./views/activity-feed.ts";
+import type { WorkStatusData } from "./views/overview.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
 import type { DayDetailData, MetricsData, ModelDetailData } from "./views/metrics.ts";
 import {
@@ -277,6 +278,8 @@ export class OpenClawApp extends LitElement {
   @state() agentActivityLastEvent: number = 0;
   @state() agentActivitySession: string | null = null;
   private activityPollTimer: number | null = null;
+  @state() workStatus: WorkStatusData | null = null;
+  private workStatusPollTimer: number | null = null;
   @state() metricsLoading = false;
   @state() metricsData: MetricsData | null = null;
   @state() metricsError: string | null = null;
@@ -542,6 +545,31 @@ export class OpenClawApp extends LitElement {
     if (this.activityPollTimer != null) {
       window.clearInterval(this.activityPollTimer);
       this.activityPollTimer = null;
+    }
+  }
+
+  async loadWorkStatus() {
+    if (!this.client || !this.connected) return;
+    try {
+      const res = await this.client.request<WorkStatusData>("activity.workStatus", {});
+      this.workStatus = res;
+    } catch {
+      // Silently fail — overview still works without this
+    }
+  }
+
+  startWorkStatusPolling() {
+    this.stopWorkStatusPolling();
+    void this.loadWorkStatus();
+    this.workStatusPollTimer = window.setInterval(() => {
+      if (this.connected) void this.loadWorkStatus();
+    }, 15000); // every 15s
+  }
+
+  stopWorkStatusPolling() {
+    if (this.workStatusPollTimer != null) {
+      window.clearInterval(this.workStatusPollTimer);
+      this.workStatusPollTimer = null;
     }
   }
 

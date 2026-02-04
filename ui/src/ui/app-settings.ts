@@ -170,14 +170,18 @@ export function setTheme(host: SettingsHost, next: ThemeMode, context?: ThemeTra
 }
 
 export async function refreshActiveTab(host: SettingsHost) {
-  // Activity feed polling
+  // Activity feed + work status polling
   {
     const app = host as unknown as OpenClawApp;
     if (host.tab === "overview") {
       void app.loadActivity();
       app.startActivityPolling();
+      app.startWorkStatusPolling();
     } else {
       app.stopActivityPolling();
+      if (typeof app.stopWorkStatusPolling === "function") {
+        app.stopWorkStatusPolling();
+      }
     }
   }
   if (host.tab === "overview") {
@@ -436,13 +440,18 @@ export function syncUrlWithSessionKey(sessionKey: string, replace: boolean) {
 }
 
 export async function loadOverview(host: SettingsHost) {
+  const app = host as unknown as OpenClawApp;
   await Promise.all([
-    loadChannels(host as unknown as OpenClawApp, false),
-    loadPresence(host as unknown as OpenClawApp),
-    loadSessions(host as unknown as OpenClawApp),
-    loadCronStatus(host as unknown as OpenClawApp),
-    loadDebug(host as unknown as OpenClawApp),
+    loadChannels(app, false),
+    loadPresence(app),
+    loadSessions(app),
+    loadCronStatus(app),
+    loadDebug(app),
   ]);
+  // Start work status polling when overview is visible
+  if (typeof app.startWorkStatusPolling === "function") {
+    app.startWorkStatusPolling();
+  }
 }
 
 export async function loadChannelsTab(host: SettingsHost) {
