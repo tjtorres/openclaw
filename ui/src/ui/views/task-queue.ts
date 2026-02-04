@@ -759,6 +759,11 @@ export function renderTaskQueue(props: TaskQueueProps) {
           </button>
           <span class="tq-muted" style="font-size:11px;">
             ${new Date(snap.fetchedAt).toLocaleTimeString()}
+            ${(snap as Record<string, unknown>).isStale
+              ? html`<span style="color:#da3633;margin-left:6px;" title="Data may be outdated — sync hasn't run recently">⚠️ stale</span>`
+              : (snap as Record<string, unknown>).lastSynced
+                ? html`<span style="color:#7d8590;margin-left:6px;" title="Last Trello sync">· synced ${timeAgo((snap as Record<string, unknown>).lastSynced as string)}</span>`
+                : nothing}
           </span>
         </div>
       </div>

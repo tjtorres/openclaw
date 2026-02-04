@@ -100,12 +100,31 @@ function requireConfig(respond: (...args: unknown[]) => void) {
   return config;
 }
 
+/** Wrap an RPC handler with catch-all error boundary. */
+function safe(
+  handler: (ctx: { params: unknown; respond: (...args: unknown[]) => void }) => unknown,
+): (ctx: { params: unknown; respond: (...args: unknown[]) => void }) => unknown {
+  return (ctx) => {
+    try {
+      const result = handler(ctx);
+      if (result instanceof Promise) {
+        return result.catch((err: unknown) => {
+          ctx.respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Unexpected error: ${String(err)}`));
+        });
+      }
+      return result;
+    } catch (err) {
+      ctx.respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Unexpected error: ${String(err)}`));
+    }
+  };
+}
+
 export const taskQueueHandlers: GatewayRequestHandlers = {
   /**
    * List all cards on the board — reads from DB.
    * Falls back to Trello API if DB unavailable.
    */
-  "taskQueue.list": async ({ respond }) => {
+  "taskQueue.list": safe(async ({ respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
 
@@ -141,6 +160,12 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
           };
         });
 
+        // Check staleness — newest synced_at across cards
+        const syncedTimes = cards.map((c) => c.synced_at).filter(Boolean).sort();
+        const lastSynced = syncedTimes.length > 0 ? syncedTimes[syncedTimes.length - 1] : null;
+        const staleMs = lastSynced ? Date.now() - new Date(lastSynced!).getTime() : Infinity;
+        const isStale = staleMs > 5 * 60 * 1000; // >5 minutes
+
         respond(true, {
           board: {
             id: config.boardId,
@@ -150,6 +175,8 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
           lists: lists.map((l) => ({ id: l.id, name: l.name, closed: false })),
           cards: cardData,
           source: "db",
+          lastSynced,
+          isStale,
           fetchedAt: Date.now(),
         });
         return;
@@ -191,12 +218,12 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to fetch: ${String(err)}`));
     }
-  },
+  }),
 
   /**
    * Card detail — reads from DB, falls back to Trello.
    */
-  "taskQueue.cardDetail": async ({ params, respond }) => {
+  "taskQueue.cardDetail": safe(async ({ params, respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
     const cardId = (params as { cardId?: string }).cardId;
@@ -272,11 +299,11 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to fetch card: ${String(err)}`));
     }
-  },
+  }),
 
   // ── Write operations: Trello API + DB update ───────────────
 
-  "taskQueue.moveCard": async ({ params, respond }) => {
+  "taskQueue.moveCard": safe(async ({ params, respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
     const { cardId, listId } = params as { cardId?: string; listId?: string };
@@ -298,9 +325,9 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to move card: ${String(err)}`));
     }
-  },
+  }),
 
-  "taskQueue.approveCard": async ({ params, respond }) => {
+  "taskQueue.approveCard": safe(async ({ params, respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
     const { cardId } = params as { cardId?: string };
@@ -337,9 +364,9 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to approve card: ${String(err)}`));
     }
-  },
+  }),
 
-  "taskQueue.addComment": async ({ params, respond }) => {
+  "taskQueue.addComment": safe(async ({ params, respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
     const { cardId, text } = params as { cardId?: string; text?: string };
@@ -363,9 +390,9 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to add comment: ${String(err)}`));
     }
-  },
+  }),
 
-  "taskQueue.toggleCheckItem": async ({ params, respond }) => {
+  "taskQueue.toggleCheckItem": safe(async ({ params, respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
     const { cardId, checkItemId, complete } = params as { cardId?: string; checkItemId?: string; complete?: boolean };
@@ -388,9 +415,9 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to toggle check item: ${String(err)}`));
     }
-  },
+  }),
 
-  "taskQueue.markSeen": async ({ params, respond }) => {
+  "taskQueue.markSeen": safe(async ({ params, respond }) => {
     const config = requireConfig(respond);
     if (!config) return;
     const { cardId } = params as { cardId?: string };
@@ -421,12 +448,12 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Failed to mark seen: ${String(err)}`));
     }
-  },
+  }),
 
   /**
    * Card metrics — reads from tasks.sqlite activity table + usage_costs.sqlite.
    */
-  "taskQueue.cardMetrics": ({ params, respond }) => {
+  "taskQueue.cardMetrics": safe(({ params, respond }) => {
     const { cardId } = params as { cardId?: string };
     if (!cardId) {
       respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "cardId required"));
@@ -535,5 +562,5 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
       try { costDb.close(); } catch {}
       respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, `Card metrics query failed: ${String(err)}`));
     }
-  },
+  }),
 };
