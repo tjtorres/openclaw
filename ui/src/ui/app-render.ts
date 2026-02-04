@@ -202,6 +202,32 @@ export function renderApp(state: AppViewState) {
           </div>
         </section>
 
+        ${state.pwaInstallPrompt && !state.pwaInstallDismissed ? html`
+          <div class="pwa-banner">
+            <span>📱 Install OpenClaw as an app for quick access</span>
+            <button class="pwa-install-btn" @click=${() => state.installPwa()}>Install</button>
+            <button class="pwa-dismiss-btn" @click=${() => state.dismissPwaPrompt()}>✕</button>
+          </div>
+          <style>
+            .pwa-banner {
+              display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+              background: var(--bg-accent, #1f6feb22); border: 1px solid var(--border);
+              border-radius: 8px; margin: 0 16px 12px; font-size: 13px;
+            }
+            .pwa-banner span { flex: 1; }
+            .pwa-install-btn {
+              background: #238636; color: #fff; border: none; border-radius: 6px;
+              padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+            }
+            .pwa-install-btn:hover { background: #2ea043; }
+            .pwa-dismiss-btn {
+              background: none; border: none; color: var(--text); opacity: 0.4;
+              cursor: pointer; font-size: 14px; padding: 4px;
+            }
+            .pwa-dismiss-btn:hover { opacity: 0.8; }
+          </style>
+        ` : nothing}
+
         ${
           state.tab === "overview"
             ? renderOverview({

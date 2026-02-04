@@ -305,6 +305,9 @@ export class OpenClawApp extends LitElement {
   @state() skillsBusyKey: string | null = null;
   @state() skillMessages: Record<string, SkillMessage> = {};
 
+  @state() pwaInstallPrompt: Event | null = null;
+  @state() pwaInstallDismissed = false;
+
   @state() debugLoading = false;
   @state() debugStatus: StatusSummary | null = null;
   @state() debugHealth: HealthSnapshot | null = null;
@@ -361,10 +364,31 @@ export class OpenClawApp extends LitElement {
     }
   };
 
+  private _handleInstallPrompt = (e: Event) => {
+    e.preventDefault();
+    this.pwaInstallPrompt = e;
+  };
+
+  async installPwa() {
+    const prompt = this.pwaInstallPrompt as any;
+    if (!prompt?.prompt) return;
+    prompt.prompt();
+    const result = await prompt.userChoice;
+    if (result.outcome === "accepted") {
+      this.pwaInstallPrompt = null;
+      this.pwaInstallDismissed = true;
+    }
+  }
+
+  dismissPwaPrompt() {
+    this.pwaInstallDismissed = true;
+  }
+
   connectedCallback() {
     super.connectedCallback();
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
     document.addEventListener("keydown", this._handleKeydown);
+    window.addEventListener("beforeinstallprompt", this._handleInstallPrompt);
   }
 
   protected firstUpdated() {
@@ -373,6 +397,7 @@ export class OpenClawApp extends LitElement {
 
   disconnectedCallback() {
     document.removeEventListener("keydown", this._handleKeydown);
+    window.removeEventListener("beforeinstallprompt", this._handleInstallPrompt);
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
