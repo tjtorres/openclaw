@@ -1,16 +1,26 @@
 /**
- * Notifications view — actionable items with quick approve/dismiss.
+ * Notifications view — actionable items with prominent approve/reject.
+ *
+ * Design: Each notification card shows:
+ *   - Icon + type badge (Approval Needed / Blocked / Working / Done)
+ *   - Title (card name)
+ *   - Summary: clear sentence about what this is and what you need to do
+ *   - Progress bar if checklist exists
+ *   - Action buttons (Approve/Reject prominent, Details secondary)
+ *   - Expandable description
  */
 import { html, nothing } from "lit";
 import { formatAgo } from "../format.ts";
 
 export type NotificationItem = {
   id: string;
-  type: "proposal" | "blocked" | "alert" | "completed";
+  type: "proposal" | "blocked" | "alert" | "completed" | "in-progress";
   title: string;
+  summary: string;
   description: string;
   cardId?: string;
   cardName?: string;
+  progress?: { done: number; total: number };
   actions: Array<{
     label: string;
     action: string;
@@ -35,109 +45,207 @@ export type NotificationsProps = {
   onRefresh: () => void;
 };
 
-const typeIcons: Record<string, string> = {
-  proposal: "📋",
-  blocked: "🚫",
-  alert: "⚠️",
-  completed: "✅",
-};
-
-const typeLabels: Record<string, string> = {
-  proposal: "Needs Approval",
-  blocked: "Blocked",
-  alert: "Alert",
-  completed: "Completed",
+const typeBadge: Record<string, { label: string; bg: string; fg: string }> = {
+  proposal:      { label: "Approval Needed", bg: "#fff3cd", fg: "#856404" },
+  blocked:       { label: "Blocked",         bg: "#f8d7da", fg: "#721c24" },
+  alert:         { label: "Alert",           bg: "#f8d7da", fg: "#721c24" },
+  "in-progress": { label: "In Progress",     bg: "#cce5ff", fg: "#004085" },
+  completed:     { label: "Done",            bg: "#d4edda", fg: "#155724" },
 };
 
 export function renderNotifications(props: NotificationsProps) {
   if (props.loading && !props.data) {
-    return html`<div class="card"><div class="muted">Loading notifications...</div></div>`;
+    return html`<div class="card" style="padding:24px;text-align:center;color:var(--text-muted)">Loading notifications…</div>`;
   }
   if (props.error) {
     return html`<div class="card"><div class="callout danger">${props.error}</div></div>`;
   }
   if (!props.data) {
-    return html`<div class="card"><div class="muted">No notification data.</div></div>`;
+    return html`<div class="card" style="padding:24px;text-align:center;color:var(--text-muted)">No data</div>`;
   }
 
   const { notifications, unreadCount } = props.data;
-  const unread = notifications.filter((n) => !n.read);
-  const read = notifications.filter((n) => n.read);
+  const actionable = notifications.filter((n) => !n.read);
+  const informational = notifications.filter((n) => n.read);
 
   return html`
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px">
-      <div>
+    <style>
+      .notif-card {
+        background: var(--panel, #1a1a2e);
+        border: 1px solid var(--border, #333);
+        border-radius: 10px;
+        padding: 16px 20px;
+        transition: border-color 0.15s;
+      }
+      .notif-card:hover { border-color: var(--border-strong, #555); }
+      .notif-card--unread { border-left: 3px solid var(--accent, #4caf50); }
+      .notif-badge {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+      }
+      .notif-summary {
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--text, #e0e0e0);
+        margin: 8px 0;
+      }
+      .notif-desc {
+        font-size: 12px;
+        color: var(--text-muted, #888);
+        line-height: 1.4;
+        max-height: 80px;
+        overflow: hidden;
+        margin-top: 8px;
+        padding: 8px;
+        background: var(--bg-hover, rgba(255,255,255,0.03));
+        border-radius: 6px;
+      }
+      .notif-actions { display: flex; gap: 8px; margin-top: 12px; }
+      .notif-btn {
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.15s, transform 0.1s;
+      }
+      .notif-btn:hover { opacity: 0.9; }
+      .notif-btn:active { transform: scale(0.97); }
+      .notif-btn--approve {
+        background: #43a047;
+        color: white;
+        font-size: 14px;
+        padding: 10px 24px;
+      }
+      .notif-btn--reject {
+        background: transparent;
+        color: #e53935;
+        border: 1px solid #e53935;
+        padding: 8px 16px;
+      }
+      .notif-btn--default {
+        background: var(--bg-hover, rgba(255,255,255,0.08));
+        color: var(--text-muted, #aaa);
+      }
+      .notif-progress {
+        height: 4px;
+        background: var(--bg-hover, rgba(255,255,255,0.08));
+        border-radius: 2px;
+        margin-top: 8px;
+        overflow: hidden;
+      }
+      .notif-progress-bar {
+        height: 100%;
+        background: var(--accent, #4caf50);
+        border-radius: 2px;
+        transition: width 0.3s;
+      }
+      .notif-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .notif-time { font-size: 11px; color: var(--text-muted, #888); }
+      .notif-section-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted);
+        margin: 20px 0 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--border, #333);
+      }
+    </style>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px">
         ${unreadCount > 0
-          ? html`<span style="background: var(--accent, #4caf50); color: white; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600">${unreadCount} pending</span>`
-          : html`<span class="muted">All caught up</span>`}
+          ? html`<span style="background:#e53935;color:white;padding:4px 14px;border-radius:16px;font-size:14px;font-weight:700">${unreadCount} need${unreadCount === 1 ? "s" : ""} attention</span>`
+          : html`<span style="background:#43a047;color:white;padding:4px 14px;border-radius:16px;font-size:14px;font-weight:600">✓ All clear</span>`}
       </div>
-      <button class="btn" @click=${() => props.onRefresh()}>Refresh</button>
+      <button class="notif-btn notif-btn--default" @click=${() => props.onRefresh()} style="font-size:12px">↻ Refresh</button>
     </div>
 
-    ${unread.length > 0
-      ? html`
-          <div style="display: flex; flex-direction: column; gap: 8px">
-            ${unread.map((n) => renderNotificationCard(n, props.onAction))}
-          </div>
-        `
-      : nothing}
+    ${actionable.length > 0 ? html`
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${actionable.map((n) => renderNotifCard(n, props.onAction))}
+      </div>
+    ` : nothing}
 
-    ${read.length > 0
-      ? html`
-          <div style="margin-top: 16px">
-            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px">Recent</div>
-            <div style="display: flex; flex-direction: column; gap: 6px">
-              ${read.map((n) => renderNotificationCard(n, props.onAction, true))}
-            </div>
-          </div>
-        `
-      : nothing}
+    ${informational.length > 0 ? html`
+      <div class="notif-section-label">Recent Activity</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${informational.map((n) => renderNotifCard(n, props.onAction, true))}
+      </div>
+    ` : nothing}
+
+    ${notifications.length === 0 ? html`
+      <div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
+        <div style="font-size:32px;margin-bottom:8px">🔔</div>
+        <div>No notifications yet.</div>
+      </div>
+    ` : nothing}
   `;
 }
 
-function renderNotificationCard(
+function renderNotifCard(
   n: NotificationItem,
   onAction: (action: string, params: Record<string, unknown>) => void,
-  dimmed = false,
+  compact = false,
 ) {
-  const icon = typeIcons[n.type] || "📌";
-  const label = typeLabels[n.type] || n.type;
+  const badge = typeBadge[n.type] || typeBadge["alert"];
+  const pct = n.progress?.total ? Math.round((n.progress.done / n.progress.total) * 100) : 0;
+
+  if (compact) {
+    return html`
+      <div class="notif-card" style="padding:10px 16px;opacity:0.7">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="notif-badge" style="background:${badge.bg};color:${badge.fg}">${badge.label}</span>
+          <span style="font-size:13px;font-weight:500">${n.title}</span>
+          <span class="notif-time" style="margin-left:auto">${formatAgo(new Date(n.createdAt).getTime())}</span>
+        </div>
+      </div>
+    `;
+  }
 
   return html`
-    <div class="card" style="padding: 12px 16px; ${dimmed ? "opacity: 0.6;" : ""}">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px">
-        <div style="flex: 1; min-width: 0">
-          <div style="display: flex; align-items: center; gap: 8px">
-            <span style="font-size: 18px">${icon}</span>
-            <div>
-              <div style="font-weight: 600; font-size: 14px">${n.title}</div>
-              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px">
-                ${label} · ${formatAgo(new Date(n.createdAt).getTime())}
-              </div>
-            </div>
-          </div>
-          ${n.description
-            ? html`<div style="margin-top: 6px; font-size: 13px; color: var(--text-muted); line-height: 1.4; max-height: 60px; overflow: hidden">${n.description}</div>`
-            : nothing}
-        </div>
-        ${n.actions.length > 0
-          ? html`
-              <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center">
-                ${n.actions.map(
-                  (a) => html`
-                    <button
-                      class="btn ${a.style === "primary" ? "btn--primary" : ""}"
-                      style="${a.style === "primary" ? "background: var(--accent, #4caf50); color: white; border: none; font-weight: 600;" : ""}"
-                      @click=${() => onAction(a.action, a.params)}
-                    >
-                      ${a.label}
-                    </button>
-                  `,
-                )}
-              </div>
-            `
-          : nothing}
+    <div class="notif-card ${n.read ? "" : "notif-card--unread"}">
+      <div class="notif-meta">
+        <span class="notif-badge" style="background:${badge.bg};color:${badge.fg}">${badge.label}</span>
+        <span class="notif-time">${formatAgo(new Date(n.createdAt).getTime())}</span>
       </div>
+
+      <div style="font-size:16px;font-weight:600;margin:4px 0">${n.title}</div>
+      <div class="notif-summary">${n.summary}</div>
+
+      ${n.progress && n.progress.total > 0 ? html`
+        <div class="notif-progress">
+          <div class="notif-progress-bar" style="width:${pct}%"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${n.progress.done}/${n.progress.total} checklist items</div>
+      ` : nothing}
+
+      ${n.description && n.type !== "completed" ? html`
+        <div class="notif-desc">${n.description.slice(0, 300)}${n.description.length > 300 ? "…" : ""}</div>
+      ` : nothing}
+
+      ${n.actions.length > 0 ? html`
+        <div class="notif-actions">
+          ${n.actions.map((a) => html`
+            <button
+              class="notif-btn ${a.style === "primary" ? "notif-btn--approve" : a.style === "danger" ? "notif-btn--reject" : "notif-btn--default"}"
+              @click=${() => onAction(a.action, a.params)}
+            >${a.label}</button>
+          `)}
+        </div>
+      ` : nothing}
     </div>
   `;
 }

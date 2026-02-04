@@ -1,22 +1,26 @@
 /**
  * Notifications RPC — surfaces actionable items for quick review.
  *
- * Returns pending proposals, blocked items, cost alerts, etc.
- * The dashboard shows these in a bell icon with unread count.
+ * Each notification answers: What is it? Why does it matter? What do you need to do?
  */
 import type { GatewayRequestHandlers } from "./types.js";
-import { getTasksDb } from "./tasks-db.js";
+import { getTasksDb, getChecklistProgress } from "./tasks-db.js";
 
 export type Notification = {
   id: string;
-  type: "proposal" | "blocked" | "alert" | "completed";
+  type: "proposal" | "blocked" | "alert" | "completed" | "in-progress";
   title: string;
+  /** Short, clear summary: what this is and what's needed from you. */
+  summary: string;
+  /** Full description / card body for expand. */
   description: string;
   cardId?: string;
   cardName?: string;
+  /** Checklist progress if applicable. */
+  progress?: { done: number; total: number };
   actions: Array<{
     label: string;
-    action: string; // RPC method to call
+    action: string;
     params: Record<string, unknown>;
     style?: "primary" | "danger" | "default";
   }>;
@@ -30,6 +34,15 @@ export type NotificationsResult = {
   fetchedAt: number;
 };
 
+/** Extract first meaningful paragraph from a card description. */
+function extractSummary(desc: string | null, maxLen = 180): string {
+  if (!desc) return "";
+  // Skip markdown headers, empty lines
+  const lines = desc.split("\n").filter((l) => l.trim() && !l.startsWith("#") && !l.startsWith("---"));
+  const first = lines.slice(0, 3).join(" ").trim();
+  return first.length > maxLen ? first.slice(0, maxLen) + "…" : first;
+}
+
 export const notificationsHandlers: GatewayRequestHandlers = {
   "notifications.list": ({ respond }) => {
     const db = getTasksDb();
@@ -40,7 +53,7 @@ export const notificationsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    // 1. Proposed cards — need approval
+    // ── Proposed cards — need your approval ──────────────────
     const proposed = db.prepare(`
       SELECT c.id, c.name, c.description, c.updated_at
       FROM cards c JOIN lists l ON c.list_id = l.id
@@ -49,27 +62,33 @@ export const notificationsHandlers: GatewayRequestHandlers = {
     `).all() as Array<{ id: string; name: string; description: string; updated_at: string }>;
 
     for (const card of proposed) {
-      const approvedList = db.prepare(
-        "SELECT id FROM lists WHERE name='Approved' LIMIT 1"
-      ).all() as Array<{ id: string }>;
-      const approvedListId = approvedList[0]?.id;
+      const progress = getChecklistProgress(db, card.id);
+      const summary = extractSummary(card.description) || "New task proposal — review and approve to start work.";
 
       notifications.push({
         id: `proposal-${card.id}`,
         type: "proposal",
         title: card.name,
-        description: card.description?.slice(0, 200) || "New task proposal",
+        summary: `🟡 Approval needed — ${summary}`,
+        description: card.description || "",
         cardId: card.id,
         cardName: card.name,
+        progress: progress.total > 0 ? progress : undefined,
         actions: [
           {
-            label: "Approve",
+            label: "✓ Approve",
             action: "taskQueue.approveCard",
             params: { cardId: card.id },
             style: "primary",
           },
           {
-            label: "View",
+            label: "✗ Reject",
+            action: "taskQueue.moveCard",
+            params: { cardId: card.id, listId: "__done__" },
+            style: "danger",
+          },
+          {
+            label: "Details",
             action: "navigate",
             params: { tab: "task-queue", cardId: card.id },
             style: "default",
@@ -80,7 +99,7 @@ export const notificationsHandlers: GatewayRequestHandlers = {
       });
     }
 
-    // 2. Blocked cards — need attention
+    // ── Blocked cards — need your input ──────────────────────
     const blocked = db.prepare(`
       SELECT c.id, c.name, c.description, c.updated_at
       FROM cards c JOIN lists l ON c.list_id = l.id
@@ -89,16 +108,27 @@ export const notificationsHandlers: GatewayRequestHandlers = {
     `).all() as Array<{ id: string; name: string; description: string; updated_at: string }>;
 
     for (const card of blocked) {
+      const summary = extractSummary(card.description) || "This task is blocked and needs your input to proceed.";
+      const progress = getChecklistProgress(db, card.id);
+
       notifications.push({
         id: `blocked-${card.id}`,
         type: "blocked",
-        title: `Blocked: ${card.name}`,
-        description: card.description?.slice(0, 200) || "Task is blocked",
+        title: card.name,
+        summary: `🔴 Blocked — ${summary}`,
+        description: card.description || "",
         cardId: card.id,
         cardName: card.name,
+        progress: progress.total > 0 ? progress : undefined,
         actions: [
           {
-            label: "View",
+            label: "Unblock",
+            action: "taskQueue.moveCard",
+            params: { cardId: card.id, listId: "__approved__" },
+            style: "primary",
+          },
+          {
+            label: "Details",
             action: "navigate",
             params: { tab: "task-queue", cardId: card.id },
             style: "default",
@@ -109,12 +139,46 @@ export const notificationsHandlers: GatewayRequestHandlers = {
       });
     }
 
-    // 3. Recently completed (last 3) — informational
+    // ── In-progress cards — status update ────────────────────
+    const inProgress = db.prepare(`
+      SELECT c.id, c.name, c.description, c.updated_at
+      FROM cards c JOIN lists l ON c.list_id = l.id
+      WHERE l.name = 'In Progress'
+      ORDER BY c.updated_at DESC
+    `).all() as Array<{ id: string; name: string; description: string; updated_at: string }>;
+
+    for (const card of inProgress) {
+      const progress = getChecklistProgress(db, card.id);
+      const pctText = progress.total > 0 ? `${progress.done}/${progress.total} done` : "in progress";
+
+      notifications.push({
+        id: `progress-${card.id}`,
+        type: "in-progress",
+        title: card.name,
+        summary: `🔵 Working — ${pctText}`,
+        description: card.description || "",
+        cardId: card.id,
+        cardName: card.name,
+        progress: progress.total > 0 ? progress : undefined,
+        actions: [
+          {
+            label: "Details",
+            action: "navigate",
+            params: { tab: "task-queue", cardId: card.id },
+            style: "default",
+          },
+        ],
+        createdAt: card.updated_at || new Date().toISOString(),
+        read: true,
+      });
+    }
+
+    // ── Recently completed (last 5) — informational ──────────
     const completed = db.prepare(`
       SELECT card_id, card_name, ts
       FROM activity
       WHERE category = 'done'
-      ORDER BY ts DESC LIMIT 3
+      ORDER BY ts DESC LIMIT 5
     `).all() as Array<{ card_id: string; card_name: string; ts: string }>;
 
     for (const entry of completed) {
@@ -122,13 +186,14 @@ export const notificationsHandlers: GatewayRequestHandlers = {
         notifications.push({
           id: `completed-${entry.card_id}-${entry.ts}`,
           type: "completed",
-          title: `Completed: ${entry.card_name || "task"}`,
+          title: entry.card_name || "task",
+          summary: "✅ Completed",
           description: "",
           cardId: entry.card_id,
           cardName: entry.card_name,
           actions: [],
           createdAt: entry.ts,
-          read: true, // completions are auto-read
+          read: true,
         });
       }
     }

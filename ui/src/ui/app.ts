@@ -606,6 +606,59 @@ export class OpenClawApp extends LitElement {
     }
   }
 
+  async setupPushNotifications() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      // Get VAPID public key
+      if (!this.client || !this.connected) return;
+      const { publicKey } = await this.client.request<{ publicKey: string }>("push.vapidPublicKey", {});
+      if (!publicKey) return;
+
+      // Check existing subscription
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        // Request permission and subscribe
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") return;
+        const urlBase64ToUint8Array = (base64String: string) => {
+          const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+          const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+          const raw = atob(base64);
+          const arr = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
+          return arr;
+        };
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+      }
+
+      // Send subscription to server
+      await this.client.request("push.subscribe", {
+        subscription: {
+          endpoint: sub.endpoint,
+          keys: {
+            p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey("p256dh")!))),
+            auth: btoa(String.fromCharCode(...new Uint8Array(sub.getKey("auth")!))),
+          },
+        },
+      });
+
+      // Listen for service worker messages (action clicks)
+      navigator.serviceWorker.addEventListener("message", (event) => {
+        if (event.data?.type === "notification-action") {
+          void this.handleNotificationAction(event.data.rpcMethod, event.data.rpcParams);
+        } else if (event.data?.type === "navigate") {
+          this.tab = (event.data.tab || "notifications") as never;
+        }
+      });
+    } catch (err) {
+      console.log("[push] Setup failed:", err);
+    }
+  }
+
   async handleNotificationAction(action: string, params: Record<string, unknown>) {
     if (action === "navigate") {
       const tab = params.tab as string;

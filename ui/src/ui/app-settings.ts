@@ -463,9 +463,12 @@ export async function loadOverview(host: SettingsHost) {
   if (typeof app.startWorkStatusPolling === "function") {
     app.startWorkStatusPolling();
   }
-  // Always load notifications for badge count
+  // Always load notifications for badge count + setup push
   if (typeof app.loadNotifications === "function") {
     void app.loadNotifications();
+  }
+  if (typeof app.setupPushNotifications === "function") {
+    void app.setupPushNotifications();
   }
 }
 

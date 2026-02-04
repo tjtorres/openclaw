@@ -1,63 +1,74 @@
-// OpenClaw Control — Service Worker
-// Strategy: network-first for API/RPC, cache-first for static assets
+/**
+ * Service worker for OpenClaw push notifications.
+ *
+ * Handles:
+ * - Push events → show notification with actions
+ * - Notification click → open dashboard tab
+ * - Action click → call RPC (approve/reject) via fetch
+ */
 
-const CACHE_NAME = "openclaw-v1";
-const SHELL_URLS = ["/", "/index.html"];
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
 
-// Install: cache the app shell
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS))
-  );
-  self.skipWaiting();
+  const data = event.data.json();
+  const { title, body, type, cardId, actions, tag, icon } = data;
+
+  const opts = {
+    body: body || "",
+    icon: icon || "/icon-192.png",
+    badge: "/icon-192.png",
+    tag: tag || `notif-${cardId || Date.now()}`,
+    renotify: true,
+    requireInteraction: type === "proposal" || type === "blocked",
+    data: { cardId, type, actions },
+    actions: (actions || []).slice(0, 2).map((a) => ({
+      action: a.action,
+      title: a.label,
+    })),
+  };
+
+  event.waitUntil(self.registration.showNotification(title, opts));
 });
 
-// Activate: clean old caches
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
 
-// Fetch: network-first for HTML/API, cache-first for assets
-self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
+  const { cardId, actions } = event.notification.data || {};
 
-  // Skip non-GET and WebSocket
-  if (event.request.method !== "GET") return;
-  if (url.protocol === "ws:" || url.protocol === "wss:") return;
-
-  // Static assets (JS, CSS, images) — cache-first
-  if (url.pathname.match(/\.(js|css|png|svg|ico|woff2?)$/)) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+  // If an action button was clicked
+  if (event.action && actions) {
+    const action = actions.find((a) => a.action === event.action);
+    if (action && action.action !== "navigate") {
+      // Fire RPC via fetch
+      event.waitUntil(
+        clients.matchAll({ type: "window" }).then((windowClients) => {
+          // Post message to any open window to execute the RPC
+          for (const client of windowClients) {
+            client.postMessage({
+              type: "notification-action",
+              rpcMethod: action.action,
+              rpcParams: action.params,
+            });
+            client.focus();
+            return;
           }
-          return response;
-        });
-      })
-    );
-    return;
+          // No window open — open one
+          return clients.openWindow(`/notifications`);
+        }),
+      );
+      return;
+    }
   }
 
-  // HTML/navigation — network-first with cache fallback
-  if (event.request.mode === "navigate" || event.request.headers.get("accept")?.includes("text/html")) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => caches.match("/index.html"))
-    );
-    return;
-  }
+  // Default: open notification tab
+  event.waitUntil(
+    clients.matchAll({ type: "window" }).then((windowClients) => {
+      for (const client of windowClients) {
+        client.focus();
+        client.postMessage({ type: "navigate", tab: "notifications", cardId });
+        return;
+      }
+      return clients.openWindow(cardId ? `/task-queue?card=${cardId}` : "/notifications");
+    }),
+  );
 });

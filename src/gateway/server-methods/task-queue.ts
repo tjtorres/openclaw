@@ -7,6 +7,7 @@
 import type { GatewayRequestHandlers } from "./types.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
 import { getProvider } from "./task-provider.js";
+import { getTasksDb } from "./tasks-db.js";
 
 /** Wrap an RPC handler with catch-all error boundary. */
 function safe(
@@ -64,10 +65,22 @@ export const taskQueueHandlers: GatewayRequestHandlers = {
   "taskQueue.moveCard": safe(async ({ params, respond }) => {
     const provider = requireProvider(respond);
     if (!provider) return;
-    const { cardId, listId } = params as { cardId?: string; listId?: string };
+    const { cardId } = params as { cardId?: string; listId?: string };
+    let { listId } = params as { listId?: string };
     if (!cardId || !listId) {
       respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "cardId and listId required"));
       return;
+    }
+    // Resolve virtual list IDs (used by notifications)
+    if (listId.startsWith("__")) {
+      const db = getTasksDb();
+      if (db) {
+        const targetName = listId === "__done__" ? "Done" : listId === "__approved__" ? "Approved" : listId === "__in_progress__" ? "In Progress" : null;
+        if (targetName) {
+          const row = db.prepare("SELECT id FROM lists WHERE name=? LIMIT 1").all(targetName) as Array<{ id: string }>;
+          listId = row[0]?.id ?? listId;
+        }
+      }
     }
     const result = await provider.moveCard(cardId, listId);
     respond(true, result);
