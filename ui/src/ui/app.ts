@@ -7,6 +7,14 @@ import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
 import type { IssueStatus } from "./controllers/issues.ts";
 import type { IssuesListResult } from "./controllers/issues.ts";
+import type { SprintsListData } from "./views/sprints.ts";
+import {
+  loadSprints as loadSprintsInternal,
+  createSprint as createSprintInternal,
+  completeSprint as completeSprintInternal,
+  cancelSprint as cancelSprintInternal,
+  completeSprintCard as completeSprintCardInternal,
+} from "./controllers/sprints.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
@@ -279,6 +287,10 @@ export class OpenClawApp extends LitElement {
   @state() metricsSelectedDay: string | null = null;
   @state() metricsDayDetail: DayDetailData | null = null;
   @state() metricsDayDetailLoading = false;
+  @state() sprintsLoading = false;
+  @state() sprintsData: SprintsListData | null = null;
+  @state() sprintsError: string | null = null;
+  @state() sprintsShowCreateForm = false;
   @state() issuesLoading = false;
   @state() issuesData: IssuesListResult | null = null;
   @state() issuesError: string | null = null;
@@ -582,6 +594,25 @@ export class OpenClawApp extends LitElement {
     this.metricsModelDetail = null;
     this.metricsSelectedDay = null;
     this.metricsDayDetail = null;
+  }
+
+  async loadSprints() {
+    await loadSprintsInternal(this as unknown as Parameters<typeof loadSprintsInternal>[0]);
+  }
+  async createSprint(name: string, goal: string, endDate: string) {
+    await createSprintInternal(this as unknown as Parameters<typeof createSprintInternal>[0], name, goal, endDate);
+  }
+  async completeSprint(sprintId: string) {
+    await completeSprintInternal(this as unknown as Parameters<typeof completeSprintInternal>[0], sprintId);
+  }
+  async cancelSprint(sprintId: string) {
+    await cancelSprintInternal(this as unknown as Parameters<typeof cancelSprintInternal>[0], sprintId);
+  }
+  async completeSprintCard(sprintId: string, cardId: string) {
+    await completeSprintCardInternal(this as unknown as Parameters<typeof completeSprintCardInternal>[0], sprintId, cardId);
+  }
+  toggleSprintCreateForm() {
+    this.sprintsShowCreateForm = !this.sprintsShowCreateForm;
   }
 
   async loadIssues() {

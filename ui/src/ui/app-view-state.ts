@@ -8,6 +8,7 @@ import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
 import type { CardMetrics, TaskQueueCardDetail, TaskQueueSnapshot } from "./task-queue-types.ts";
+import type { SprintsListData } from "./views/sprints.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
 import type { ThemeMode } from "./theme.ts";
 import type {
@@ -178,6 +179,10 @@ export type AppViewState = {
   selectMetricsModel: (model: string) => void;
   selectMetricsDay: (day: string) => void;
   closeMetricsDetail: () => void;
+  sprintsLoading: boolean;
+  sprintsData: SprintsListData | null;
+  sprintsError: string | null;
+  sprintsShowCreateForm: boolean;
   issuesLoading: boolean;
   issuesData: { issues: Issue[]; counts: IssuesCounts; fetchedAt: number } | null;
   issuesError: string | null;

@@ -218,6 +218,10 @@ export async function refreshActiveTab(host: SettingsHost) {
     const app = host as unknown as OpenClawApp;
     await app.loadMetrics();
   }
+  if (host.tab === "sprints") {
+    const app = host as unknown as OpenClawApp;
+    await app.loadSprints();
+  }
   if (host.tab === "issues") {
     const app = host as unknown as OpenClawApp;
     await app.loadIssues();

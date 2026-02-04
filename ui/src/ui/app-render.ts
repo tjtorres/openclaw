@@ -66,6 +66,7 @@ import { renderInstances } from "./views/instances.ts";
 import { renderIssues } from "./views/issues.ts";
 import { renderLogs } from "./views/logs.ts";
 import { renderMetrics } from "./views/metrics.ts";
+import { renderSprints } from "./views/sprints.ts";
 import { renderNodes } from "./views/nodes.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
@@ -365,6 +366,25 @@ export function renderApp(state: AppViewState) {
                   state.toggleTaskQueueCheckItem(cardId, checkItemId, complete),
                 onAddComment: (cardId: string, text: string) =>
                   state.addTaskQueueComment(cardId, text),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "sprints"
+            ? renderSprints({
+                loading: state.sprintsLoading,
+                data: state.sprintsData,
+                error: state.sprintsError,
+                showCreateForm: state.sprintsShowCreateForm,
+                onRefresh: () => state.loadSprints(),
+                onCreate: (name: string, goal: string, endDate: string) =>
+                  state.createSprint(name, goal, endDate),
+                onComplete: (sprintId: string) => state.completeSprint(sprintId),
+                onCancel: (sprintId: string) => state.cancelSprint(sprintId),
+                onToggleCreateForm: () => state.toggleSprintCreateForm(),
+                onCompleteCard: (sprintId: string, cardId: string) =>
+                  state.completeSprintCard(sprintId, cardId),
               })
             : nothing
         }

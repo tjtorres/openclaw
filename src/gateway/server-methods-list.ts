@@ -81,6 +81,13 @@ const BASE_METHODS = [
   "agent.identity.get",
   "agent.wait",
   "browser.request",
+  // Sprints
+  "sprints.list",
+  "sprints.create",
+  "sprints.update",
+  "sprints.addCard",
+  "sprints.completeCard",
+  "sprints.removeCard",
   // Task Queue
   "taskQueue.list",
   "taskQueue.cardDetail",

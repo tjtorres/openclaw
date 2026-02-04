@@ -6,7 +6,7 @@ export const TAB_GROUPS = [
     label: "Control",
     tabs: ["overview", "channels", "instances", "sessions", "cron"],
   },
-  { label: "Work", tabs: ["task-queue", "metrics", "issues"] },
+  { label: "Work", tabs: ["task-queue", "sprints", "metrics", "issues"] },
   { label: "Agent", tabs: ["agents", "skills", "nodes"] },
   { label: "Settings", tabs: ["config", "debug", "logs"] },
 ] as const;
@@ -19,6 +19,7 @@ export type Tab =
   | "sessions"
   | "cron"
   | "task-queue"
+  | "sprints"
   | "metrics"
   | "issues"
   | "skills"
@@ -36,6 +37,7 @@ const TAB_PATHS: Record<Tab, string> = {
   sessions: "/sessions",
   cron: "/cron",
   "task-queue": "/task-queue",
+  sprints: "/sprints",
   metrics: "/metrics",
   issues: "/issues",
   skills: "/skills",
@@ -145,6 +147,8 @@ export function iconForTab(tab: Tab): IconName {
       return "loader";
     case "task-queue":
       return "check";
+    case "sprints":
+      return "loader";
     case "metrics":
       return "barChart";
     case "issues":
@@ -180,6 +184,8 @@ export function titleForTab(tab: Tab) {
       return "Cron Jobs";
     case "task-queue":
       return "Task Queue";
+    case "sprints":
+      return "Sprints";
     case "metrics":
       return "Metrics";
     case "issues":
