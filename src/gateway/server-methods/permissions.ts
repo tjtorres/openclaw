@@ -37,7 +37,26 @@ function loadConfig(): PermissionsConfig | null {
   }
 }
 
+import { writeFileSync } from "node:fs";
+
 export const permissionsHandlers: GatewayRequestHandlers = {
+  "permissions.toggleAutoRun": ({ params, respond }) => {
+    const config = loadConfig();
+    if (!config) {
+      respond(false, undefined, { code: -1, message: "Not configured" });
+      return;
+    }
+    const { enabled } = params as { enabled?: boolean };
+    config.autonomy.autoRun = enabled ?? !config.autonomy.autoRun;
+    try {
+      const p = join(workspacePath(), "permissions.json");
+      writeFileSync(p, JSON.stringify(config, null, 2) + "\n");
+      respond(true, { autoRun: config.autonomy.autoRun });
+    } catch (err) {
+      respond(false, undefined, { code: -1, message: String(err) });
+    }
+  },
+
   "permissions.summary": ({ respond }) => {
     const config = loadConfig();
     if (!config) {
@@ -68,6 +87,7 @@ export const permissionsHandlers: GatewayRequestHandlers = {
       approvedEpochs: config.autonomy?.approvedEpochs || [],
       budgetPerDay: config.autonomy?.budgetPerDay || 0,
       budgetPerSprint: config.autonomy?.budgetPerSprint || 0,
+      autoRun: config.autonomy?.autoRun ?? false,
       granted: granted.sort(),
       denied: denied.sort(),
       totalGranted: granted.length,

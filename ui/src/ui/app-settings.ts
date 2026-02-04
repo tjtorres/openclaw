@@ -463,9 +463,21 @@ export async function loadOverview(host: SettingsHost) {
   if (typeof app.startWorkStatusPolling === "function") {
     app.startWorkStatusPolling();
   }
-  // Load permissions for overview widget
+  // Load swarm status on overview
+  if (typeof app.loadSwarmStatus === "function") {
+    void app.loadSwarmStatus();
+  }
+  // Load permissions for overview widget + wire auto-run toggle
   if (typeof app.loadPermissions === "function") {
     void app.loadPermissions();
+    import("./views/overview.ts").then(({ setAutoRunToggleHandler }) => {
+      setAutoRunToggleHandler(async (enabled: boolean) => {
+        if (app.client && app.connected) {
+          await app.client.request("permissions.toggleAutoRun", { enabled });
+          void app.loadPermissions();
+        }
+      });
+    });
   }
   // Always load notifications for badge count + setup push
   if (typeof app.loadNotifications === "function") {

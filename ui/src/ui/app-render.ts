@@ -264,6 +264,7 @@ export function renderApp(state: AppViewState) {
                 agentSession: state.agentActivitySession,
                 workStatus: state.workStatus,
                 permissions: state.permissionsData,
+                swarmStatus: state.swarmStatusData,
                 onSettingsChange: (next) => state.applySettings(next),
                 onPasswordChange: (next) => (state.password = next),
                 onSessionKeyChange: (next) => {

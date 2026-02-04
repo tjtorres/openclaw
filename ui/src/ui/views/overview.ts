@@ -12,12 +12,76 @@ export type PermissionsSummary = {
   approvedEpochs: string[];
   budgetPerDay: number;
   budgetPerSprint: number;
+  autoRun: boolean;
   granted: string[];
   denied: string[];
   totalGranted: number;
   totalDenied: number;
   configured: boolean;
 };
+
+export type SwarmWorkerInfo = {
+  id: string;
+  name: string;
+  status: "running" | "done" | "failed";
+  elapsedMs: number;
+};
+
+export type SwarmStatusData = {
+  activeSwarms: Array<{
+    swarmId: string;
+    workers: SwarmWorkerInfo[];
+    totalTasks: number;
+    completedTasks: number;
+    runningTasks: number;
+    failedTasks: number;
+  }>;
+  hasActive: boolean;
+};
+
+function formatElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m ${s % 60}s`;
+}
+
+function renderSwarmWidget(data: SwarmStatusData | null) {
+  if (!data || !data.hasActive) return nothing;
+
+  return html`
+    <div class="card" style="padding: 14px 18px">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 10px">
+        🐝 Active Swarm Workers
+      </div>
+      ${data.activeSwarms.map((swarm) => html`
+        <div style="margin-bottom: 8px">
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px">
+            ${swarm.swarmId} — ${swarm.completedTasks}/${swarm.totalTasks} done
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            ${swarm.workers.map((w) => {
+              const isRunning = w.status === "running";
+              const isDone = w.status === "done";
+              const isFailed = w.status === "failed";
+              return html`
+                <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg-hover, rgba(255,255,255,0.03)); border-radius: 6px">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: ${isDone ? '#66bb6a' : isFailed ? '#ef5350' : '#66bb6a'}; ${isRunning ? 'animation: pulse 1.5s infinite' : ''};"></span>
+                  <span style="font-size: 13px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">${w.name}</span>
+                  <span style="font-size: 11px; color: var(--text-muted)">${formatElapsed(w.elapsedMs)}</span>
+                  <span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: ${isDone ? 'rgba(102,187,106,0.2)' : isFailed ? 'rgba(239,83,80,0.2)' : 'rgba(66,165,245,0.2)'}; color: ${isDone ? '#66bb6a' : isFailed ? '#ef5350' : '#42a5f5'}">${w.status}</span>
+                </div>
+              `;
+            })}
+          </div>
+        </div>
+      `)}
+    </div>
+    <style>
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    </style>
+  `;
+}
 
 const LEVEL_COLORS: Record<number, string> = {
   1: "#78909c",
@@ -26,6 +90,12 @@ const LEVEL_COLORS: Record<number, string> = {
   4: "#ffa726",
   5: "#ab47bc",
 };
+
+// Callback stored via closure — set by the parent
+let _onToggleAutoRun: ((enabled: boolean) => void) | null = null;
+export function setAutoRunToggleHandler(handler: (enabled: boolean) => void) {
+  _onToggleAutoRun = handler;
+}
 
 function renderPermissionsWidget(perms: PermissionsSummary | null) {
   if (!perms || !perms.configured) {
@@ -42,7 +112,14 @@ function renderPermissionsWidget(perms: PermissionsSummary | null) {
     <div class="card" style="padding: 14px 18px">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px">
         <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted)">Autonomy & Permissions</div>
-        <span style="background: ${levelColor}; color: white; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600">${perms.levelLabel}</span>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <button
+            style="font-size: 11px; padding: 3px 10px; border-radius: 10px; border: 1px solid ${perms.autoRun ? '#43a047' : 'var(--border, #555)'}; background: ${perms.autoRun ? 'rgba(67,160,71,0.15)' : 'transparent'}; color: ${perms.autoRun ? '#66bb6a' : 'var(--text-muted)'}; cursor: pointer; font-weight: 600; transition: all 0.15s"
+            @click=${() => _onToggleAutoRun?.(!perms.autoRun)}
+            title="${perms.autoRun ? 'Auto-run ON: agent self-approves within permission level' : 'Auto-run OFF: agent needs explicit approval'}"
+          >${perms.autoRun ? '⚡ Auto' : '🔒 Manual'}</button>
+          <span style="background: ${levelColor}; color: white; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600">${perms.levelLabel}</span>
+        </div>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 10px">
         <div>
@@ -114,6 +191,7 @@ export type OverviewProps = {
   agentSession: string | null;
   workStatus: WorkStatusData | null;
   permissions: PermissionsSummary | null;
+  swarmStatus: SwarmStatusData | null;
   onSettingsChange: (next: UiSettings) => void;
   onPasswordChange: (next: string) => void;
   onSessionKeyChange: (next: string) => void;
@@ -418,6 +496,12 @@ export function renderOverview(props: OverviewProps) {
     <section style="margin-top: 18px;">
       ${renderPermissionsWidget(props.permissions)}
     </section>
+
+    ${props.swarmStatus?.hasActive ? html`
+      <section style="margin-top: 18px;">
+        ${renderSwarmWidget(props.swarmStatus)}
+      </section>
+    ` : nothing}
 
     <section style="margin-top: 18px;">
       ${renderWorkStatus(props.workStatus)}

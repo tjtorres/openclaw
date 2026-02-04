@@ -15,6 +15,7 @@ import { healthHandlers } from "./server-methods/health.js";
 import { issuesHandlers } from "./server-methods/issues.js";
 import { notificationsHandlers } from "./server-methods/notifications.js";
 import { permissionsHandlers } from "./server-methods/permissions.js";
+import { swarmStatusHandlers } from "./server-methods/swarm-status.js";
 import { pushHandlers } from "./server-methods/push.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { metricsHandlers } from "./server-methods/metrics.js";
@@ -199,6 +200,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...issuesHandlers,
   ...notificationsHandlers,
   ...permissionsHandlers,
+  ...swarmStatusHandlers,
   ...pushHandlers,
   ...activityHandlers,
 };

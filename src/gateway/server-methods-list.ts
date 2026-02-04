@@ -112,6 +112,9 @@ const BASE_METHODS = [
   "notifications.dismissAll",
   // Permissions
   "permissions.summary",
+  "permissions.toggleAutoRun",
+  // Swarm
+  "swarm.status",
   // Push
   "push.vapidPublicKey",
   "push.subscribe",
