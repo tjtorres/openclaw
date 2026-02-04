@@ -73,6 +73,30 @@ export type MetricsProps = {
   onCloseDetail: () => void;
   onNavigateSession: (sessionKey: string) => void;
   epochCosts: EpochCostData | null;
+  costAccuracy: CostAccuracyData | null;
+};
+
+export type CostAccuracyData = {
+  total_tracked: number;
+  completed: number;
+  active: number;
+  total_estimated_usd: number;
+  total_actual_usd: number;
+  avg_accuracy_ratio: number;
+  calibration: {
+    complexity_factors: Record<string, number>;
+    samples_per_complexity: Record<string, number>;
+    last_calibrated: string | null;
+    total_samples?: number;
+  };
+  recent: Array<{
+    card_id: string;
+    name: string;
+    complexity: string;
+    estimated: number;
+    actual: number;
+    status: string;
+  }>;
 };
 
 export type EpochCostEntry = {
@@ -419,6 +443,32 @@ export function renderMetrics(props: MetricsProps) {
       .m-session-row:hover { background: var(--bg-hover, rgba(255,255,255,0.03)); }
       .m-session-key { font-size: 12px; overflow: hidden; text-overflow: ellipsis; opacity: 0.8; }
 
+      /* Cost accuracy chart */
+      .m-accuracy-chart { margin-top: 12px; }
+      .m-accuracy-row {
+        display: grid; grid-template-columns: 120px 1fr 45px;
+        gap: 8px; align-items: center; padding: 4px 0; font-size: 11px;
+      }
+      .m-accuracy-name {
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7;
+      }
+      .m-accuracy-bars {
+        position: relative; height: 12px; background: var(--border); border-radius: 3px; overflow: hidden;
+      }
+      .m-accuracy-est {
+        position: absolute; top: 0; left: 0; height: 100%;
+        background: rgba(255,255,255,0.15); border-radius: 3px;
+      }
+      .m-accuracy-act {
+        position: absolute; top: 2px; left: 0; height: calc(100% - 4px);
+        border-radius: 2px;
+      }
+      .m-accuracy-ratio { text-align: right; font-weight: 600; }
+
+      @media (max-width: 600px) {
+        .m-accuracy-row { grid-template-columns: 80px 1fr 40px; }
+      }
+
       /* Epoch costs */
       .m-epoch-grid { display: flex; flex-direction: column; gap: 6px; }
       .m-epoch-row {
@@ -608,6 +658,77 @@ export function renderMetrics(props: MetricsProps) {
         </div>`
         : nothing
     }
+
+    <!-- Cost estimation accuracy -->
+    ${props.costAccuracy && props.costAccuracy.completed > 0 ? (() => {
+      const ca = props.costAccuracy;
+      const accPct = ca.avg_accuracy_ratio > 0 ? Math.round((1 - Math.abs(1 - ca.avg_accuracy_ratio)) * 100) : 0;
+      const accColor = accPct >= 80 ? "#66bb6a" : accPct >= 60 ? "#ffa726" : "#ef5350";
+      const variance = ca.total_actual_usd - ca.total_estimated_usd;
+      const varianceDir = variance > 0 ? "over" : "under";
+      return html`
+        <div class="m-section">
+          <div class="m-section-header">
+            <div class="m-section-title">Cost Estimation Accuracy</div>
+            <div style="font-size:11px;opacity:0.4">${ca.completed} completed tasks</div>
+          </div>
+          <div class="m-grid" style="grid-template-columns: repeat(4, 1fr)">
+            <div class="m-stat-card">
+              <div class="m-stat-value" style="color:${accColor}">${accPct}%</div>
+              <div class="m-stat-label">Accuracy</div>
+            </div>
+            <div class="m-stat-card">
+              <div class="m-stat-value">${formatCost(ca.total_estimated_usd)}</div>
+              <div class="m-stat-label">Estimated</div>
+            </div>
+            <div class="m-stat-card">
+              <div class="m-stat-value">${formatCost(ca.total_actual_usd)}</div>
+              <div class="m-stat-label">Actual</div>
+            </div>
+            <div class="m-stat-card">
+              <div class="m-stat-value" style="color:${variance > 0 ? '#ef5350' : '#66bb6a'}">${variance > 0 ? '+' : ''}${formatCost(variance)}</div>
+              <div class="m-stat-label">Variance (${varianceDir})</div>
+            </div>
+          </div>
+          ${ca.recent.filter((r) => r.status === "completed" && r.estimated > 0 && r.actual > 0).length > 0 ? html`
+            <div class="m-accuracy-chart">
+              ${ca.recent.filter((r) => r.status === "completed" && r.estimated > 0 && r.actual > 0).map((r) => {
+                const ratio = r.actual / r.estimated;
+                const rColor = ratio <= 1.1 ? "#66bb6a" : ratio <= 1.5 ? "#ffa726" : "#ef5350";
+                const estBar = 50; // estimated is always 50% baseline
+                const actBar = Math.min(100, Math.round(ratio * 50));
+                return html`
+                  <div class="m-accuracy-row">
+                    <span class="m-accuracy-name" title="${r.name}">${r.name}</span>
+                    <span class="m-accuracy-bars">
+                      <span class="m-accuracy-est" style="width:${estBar}%"></span>
+                      <span class="m-accuracy-act" style="width:${actBar}%;background:${rColor}"></span>
+                    </span>
+                    <span class="m-accuracy-ratio" style="color:${rColor}">${(ratio * 100).toFixed(0)}%</span>
+                  </div>
+                `;
+              })}
+              <div style="display:flex;gap:12px;font-size:10px;opacity:0.4;margin-top:4px">
+                <span>▬ estimated</span>
+                <span style="color:#66bb6a">▬ actual (≤110%)</span>
+                <span style="color:#ffa726">▬ actual (110-150%)</span>
+                <span style="color:#ef5350">▬ actual (>150%)</span>
+              </div>
+            </div>
+          ` : nothing}
+          ${ca.calibration.last_calibrated ? html`
+            <div style="font-size:11px;opacity:0.4;margin-top:8px">
+              Calibrated: ${formatTime(new Date(ca.calibration.last_calibrated).getTime())}
+              · ${ca.calibration.total_samples ?? 0} samples
+            </div>
+          ` : html`
+            <div style="font-size:11px;opacity:0.4;margin-top:8px">
+              Not yet calibrated — need more completed tasks with cost tracking
+            </div>
+          `}
+        </div>
+      `;
+    })() : nothing}
 
     <!-- Epoch cost breakdown -->
     ${props.epochCosts && props.epochCosts.epochs.length > 0 ? html`
