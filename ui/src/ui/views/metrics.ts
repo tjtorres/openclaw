@@ -1,4 +1,5 @@
 import { html, nothing } from "lit";
+import { formatTime, tzAbbrev } from "../time-format.js";
 
 export type MetricsData = {
   today: { cost: number; events: number };
@@ -568,7 +569,7 @@ export function renderMetrics(props: MetricsProps) {
         ${props.loading ? "↻" : "↻ Refresh"}
       </button>
       <span class="muted" style="font-size:11px;">
-        ${new Date(d.fetchedAt).toLocaleTimeString()}
+        ${formatTime(d.fetchedAt)}
       </span>
     </div>
   `;

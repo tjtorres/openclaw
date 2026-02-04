@@ -1,4 +1,5 @@
 import { html, nothing } from "lit";
+import { timeAgo, formatTime } from "../time-format.js";
 
 export type ActivityEntry = {
   ts: string;
@@ -30,17 +31,7 @@ export type ActivityFeedProps = {
   agentSession?: string | null;
 };
 
-function timeAgo(ts: string): string {
-  const diff = Date.now() - new Date(ts).getTime();
-  const secs = Math.floor(diff / 1000);
-  if (secs < 10) return "just now";
-  if (secs < 60) return `${secs}s ago`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
+// timeAgo imported from time-format.ts
 
 function categoryColor(cat: string): string {
   switch (cat) {

@@ -1,4 +1,5 @@
 import { html, nothing } from "lit";
+import { formatTime as fmtTime, timeAgo as relTime, formatDateTime, tzAbbrev } from "../time-format.js";
 import type {
   CardMetrics,
   TaskQueueCard,
@@ -66,15 +67,8 @@ function columnIcon(name: string): string {
   return map[name] ?? "📌";
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
+// Use shared timeAgo from time-format.ts (imported as relTime)
+const timeAgo = relTime;
 
 function renderProgressBar(checked: number, total: number) {
   if (total === 0) return nothing;
@@ -758,7 +752,7 @@ export function renderTaskQueue(props: TaskQueueProps) {
             ${props.loading ? "↻" : "↻ Refresh"}
           </button>
           <span class="tq-muted" style="font-size:11px;">
-            ${new Date(snap.fetchedAt).toLocaleTimeString()}
+            ${fmtTime(snap.fetchedAt)}
             ${(snap as Record<string, unknown>).isStale
               ? html`<span style="color:#da3633;margin-left:6px;" title="Data may be outdated — sync hasn't run recently">⚠️ stale</span>`
               : (snap as Record<string, unknown>).lastSynced
