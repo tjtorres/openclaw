@@ -3127,10 +3127,13 @@ function renderTabContent(props: AgencyViewProps): ReturnType<typeof html> {
 function renderAuditTab(props: AgencyViewProps): ReturnType<typeof html> {
   const { auditEntries, auditInstances, auditViolations, auditSelectedInstanceId } = props;
 
-  // Filter entries if instance selected
-  const filteredEntries = auditSelectedInstanceId
-    ? auditEntries.filter((e) => e.instanceId === auditSelectedInstanceId)
-    : auditEntries;
+  // Filter entries if instance selected, and limit to prevent rendering freeze
+  const MAX_ENTRIES = 100;
+  const filteredEntries = (
+    auditSelectedInstanceId
+      ? auditEntries.filter((e) => e.instanceId === auditSelectedInstanceId)
+      : auditEntries
+  ).slice(0, MAX_ENTRIES);
 
   return html`
     <div style="display: flex; flex-direction: column; gap: 16px;">
