@@ -93,6 +93,14 @@ export type SessionEntry = {
   lastThreadId?: string | number;
   skillsSnapshot?: SessionSkillSnapshot;
   systemPromptReport?: SessionSystemPromptReport;
+  /** Run ID of the last agent run for this session. */
+  lastRunId?: string;
+  /** Status of the last agent run (used to detect interrupted runs after gateway restart). */
+  lastRunStatus?: "running" | "completed" | "error" | "aborted";
+  /** Timestamp (ms) when the last run started. */
+  lastRunStartedAt?: number;
+  /** Timestamp (ms) when the last run ended (undefined if still running). */
+  lastRunEndedAt?: number;
 };
 
 export function mergeSessionEntry(

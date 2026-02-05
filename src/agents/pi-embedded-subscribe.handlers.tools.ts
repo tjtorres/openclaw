@@ -1,5 +1,6 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import type { EmbeddedPiSubscribeContext } from "./pi-embedded-subscribe.handlers.types.js";
+import { logToolCall } from "../gateway/server-methods/event-logger.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
 import { normalizeTextForComparison } from "./pi-embedded-helpers.js";
 import { isMessagingTool, isMessagingToolSendAction } from "./pi-embedded-messaging.js";
@@ -50,6 +51,10 @@ export async function handleToolExecutionStart(
   const toolName = normalizeToolName(rawToolName);
   const toolCallId = String(evt.toolCallId);
   const args = evt.args;
+
+  // Track tool start time and args for duration calculation and event logging
+  ctx.state.toolStartTimesById.set(toolCallId, Date.now());
+  ctx.state.toolArgsById.set(toolCallId, args);
 
   if (toolName === "read") {
     const record = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
@@ -164,6 +169,64 @@ export function handleToolExecutionEnd(
   ctx.state.toolMetas.push({ toolName, meta });
   ctx.state.toolMetaById.delete(toolCallId);
   ctx.state.toolSummaryById.delete(toolCallId);
+
+  // Calculate duration and retrieve args from state
+  const startTime = ctx.state.toolStartTimesById.get(toolCallId);
+  const durationMs = startTime ? Date.now() - startTime : undefined;
+  const args = ctx.state.toolArgsById.get(toolCallId);
+
+  // Clean up state
+  ctx.state.toolStartTimesById.delete(toolCallId);
+  ctx.state.toolArgsById.delete(toolCallId);
+
+  // Extract metadata from tool arguments for logging
+  const eventMetadata: Record<string, unknown> = {};
+  if (toolName === "exec" || toolName === "bash") {
+    const argsRecord = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
+    const command = argsRecord.command as string | undefined;
+    if (command && typeof command === "string") {
+      // Truncate command for logging (max 200 chars)
+      eventMetadata.command = command.length > 200 ? command.slice(0, 200) + "..." : command;
+    }
+    if (argsRecord.pty === true) eventMetadata.pty = true;
+    if (argsRecord.elevated === true) eventMetadata.elevated = true;
+  } else if (toolName === "read" || toolName === "write" || toolName === "edit") {
+    const argsRecord = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
+    const filePath = (argsRecord.path || argsRecord.file_path) as string | undefined;
+    if (filePath && typeof filePath === "string") {
+      eventMetadata.path = filePath;
+    }
+  } else if (toolName === "web_search") {
+    const argsRecord = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
+    const query = argsRecord.query as string | undefined;
+    if (query && typeof query === "string") {
+      eventMetadata.query = query.length > 100 ? query.slice(0, 100) + "..." : query;
+    }
+  } else if (toolName === "web_fetch") {
+    const argsRecord = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
+    const url = argsRecord.url as string | undefined;
+    if (url && typeof url === "string") {
+      eventMetadata.url = url;
+    }
+  } else if (toolName === "memory_search") {
+    const argsRecord = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
+    const query = argsRecord.query as string | undefined;
+    if (query && typeof query === "string") {
+      eventMetadata.query = query.length > 100 ? query.slice(0, 100) + "..." : query;
+    }
+  }
+
+  // Log the tool call event
+  logToolCall({
+    toolName,
+    agentId: ctx.params.agentId,
+    instanceId: ctx.params.instanceId,
+    sessionKey: ctx.params.sessionKey,
+    durationMs,
+    status: isToolError ? "error" : "ok",
+    metadata: eventMetadata,
+  });
+
   if (isToolError) {
     const errorMessage = extractToolErrorMessage(sanitizedResult);
     ctx.state.lastToolError = {

@@ -60,12 +60,16 @@ self.addEventListener("notificationclick", (event) => {
     }
   }
 
-  // Default: open notification tab
+  // Default: navigate to task queue with specific card, or notifications tab
   event.waitUntil(
     clients.matchAll({ type: "window" }).then((windowClients) => {
       for (const client of windowClients) {
         client.focus();
-        client.postMessage({ type: "navigate", tab: "notifications", cardId });
+        client.postMessage({
+          type: "navigate",
+          tab: cardId ? "task-queue" : "notifications",
+          cardId,
+        });
         return;
       }
       return clients.openWindow(cardId ? `/task-queue?card=${cardId}` : "/notifications");

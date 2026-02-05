@@ -48,35 +48,41 @@ export type NotificationsProps = {
 /** Strip markdown formatting for clean plaintext display. */
 function stripMarkdown(text: string): string {
   return text
-    .replace(/^#{1,6}\s+/gm, "")          // headers
-    .replace(/\*\*(.+?)\*\*/g, "$1")       // bold
-    .replace(/\*(.+?)\*/g, "$1")           // italic
-    .replace(/`(.+?)`/g, "$1")             // inline code
-    .replace(/^[-*]\s+/gm, "• ")           // list items
-    .replace(/^\d+\.\s+/gm, "")            // numbered lists
+    .replace(/^#{1,6}\s+/gm, "") // headers
+    .replace(/\*\*(.+?)\*\*/g, "$1") // bold
+    .replace(/\*(.+?)\*/g, "$1") // italic
+    .replace(/`(.+?)`/g, "$1") // inline code
+    .replace(/^[-*]\s+/gm, "• ") // list items
+    .replace(/^\d+\.\s+/gm, "") // numbered lists
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links
-    .replace(/---+/g, "")                  // hr
-    .replace(/\n{2,}/g, "\n")              // collapse whitespace
+    .replace(/---+/g, "") // hr
+    .replace(/\n{2,}/g, "\n") // collapse whitespace
     .trim();
 }
 
 const typeBadge: Record<string, { label: string; bg: string; fg: string }> = {
-  proposal:      { label: "Approval Needed", bg: "rgba(255, 193, 7, 0.2)", fg: "#ffc107" },
-  blocked:       { label: "Blocked",         bg: "rgba(229, 57, 53, 0.2)", fg: "#ef5350" },
-  alert:         { label: "Alert",           bg: "rgba(229, 57, 53, 0.2)", fg: "#ef5350" },
-  "in-progress": { label: "In Progress",     bg: "rgba(66, 165, 245, 0.2)", fg: "#42a5f5" },
-  completed:     { label: "Done",            bg: "rgba(76, 175, 80, 0.2)", fg: "#66bb6a" },
+  proposal: { label: "Approval Needed", bg: "rgba(255, 193, 7, 0.2)", fg: "#ffc107" },
+  blocked: { label: "Blocked", bg: "rgba(229, 57, 53, 0.2)", fg: "#ef5350" },
+  alert: { label: "Alert", bg: "rgba(229, 57, 53, 0.2)", fg: "#ef5350" },
+  "in-progress": { label: "In Progress", bg: "rgba(66, 165, 245, 0.2)", fg: "#42a5f5" },
+  completed: { label: "Done", bg: "rgba(76, 175, 80, 0.2)", fg: "#66bb6a" },
 };
 
 export function renderNotifications(props: NotificationsProps) {
   if (props.loading && !props.data) {
-    return html`<div class="card" style="padding:24px;text-align:center;color:var(--text-muted)">Loading notifications…</div>`;
+    return html`
+      <div class="card" style="padding: 24px; text-align: center; color: var(--text-muted)">
+        Loading notifications…
+      </div>
+    `;
   }
   if (props.error) {
     return html`<div class="card"><div class="callout danger">${props.error}</div></div>`;
   }
   if (!props.data) {
-    return html`<div class="card" style="padding:24px;text-align:center;color:var(--text-muted)">No data</div>`;
+    return html`
+      <div class="card" style="padding: 24px; text-align: center; color: var(--text-muted)">No data</div>
+    `;
   }
 
   const { notifications, unreadCount } = props.data;
@@ -181,9 +187,23 @@ export function renderNotifications(props: NotificationsProps) {
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:12px">
-        ${unreadCount > 0
-          ? html`<span style="background:#e53935;color:white;padding:4px 14px;border-radius:16px;font-size:14px;font-weight:700">${unreadCount} need${unreadCount === 1 ? "s" : ""} attention</span>`
-          : html`<span style="background:#43a047;color:white;padding:4px 14px;border-radius:16px;font-size:14px;font-weight:600">✓ All clear</span>`}
+        ${
+          unreadCount > 0
+            ? html`<span style="background:#e53935;color:white;padding:4px 14px;border-radius:16px;font-size:14px;font-weight:700">${unreadCount} need${unreadCount === 1 ? "s" : ""} attention</span>`
+            : html`
+                <span
+                  style="
+                    background: #43a047;
+                    color: white;
+                    padding: 4px 14px;
+                    border-radius: 16px;
+                    font-size: 14px;
+                    font-weight: 600;
+                  "
+                  >✓ All clear</span
+                >
+              `
+        }
       </div>
       <div style="display:flex;gap:8px">
         ${unreadCount > 0 ? html`<button class="notif-btn notif-btn--default" @click=${() => props.onAction("dismissAll", {})} style="font-size:12px">Mark all read</button>` : nothing}
@@ -191,25 +211,37 @@ export function renderNotifications(props: NotificationsProps) {
       </div>
     </div>
 
-    ${actionable.length > 0 ? html`
+    ${
+      actionable.length > 0
+        ? html`
       <div style="display:flex;flex-direction:column;gap:10px">
         ${actionable.map((n) => renderNotifCard(n, props.onAction))}
       </div>
-    ` : nothing}
+    `
+        : nothing
+    }
 
-    ${informational.length > 0 ? html`
+    ${
+      informational.length > 0
+        ? html`
       <div class="notif-section-label">Recent Activity</div>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${informational.map((n) => renderNotifCard(n, props.onAction, true))}
       </div>
-    ` : nothing}
+    `
+        : nothing
+    }
 
-    ${notifications.length === 0 ? html`
-      <div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
-        <div style="font-size:32px;margin-bottom:8px">🔔</div>
-        <div>No notifications yet.</div>
-      </div>
-    ` : nothing}
+    ${
+      notifications.length === 0
+        ? html`
+            <div style="text-align: center; padding: 40px 20px; color: var(--text-muted)">
+              <div style="font-size: 32px; margin-bottom: 8px">🔔</div>
+              <div>No notifications yet.</div>
+            </div>
+          `
+        : nothing
+    }
   `;
 }
 
@@ -227,43 +259,75 @@ function renderNotifCard(
         <div style="display:flex;align-items:center;gap:10px">
           <span class="notif-badge" style="background:${badge.bg};color:${badge.fg}">${badge.label}</span>
           <span style="font-size:13px;font-weight:500">${n.title}</span>
-          <span class="notif-time" style="margin-left:auto">${formatAgo(new Date(n.createdAt).getTime())}</span>
+          <span class="notif-time" style="margin-left:auto">${(() => {
+            const createdMs = new Date(n.createdAt).getTime();
+            return isNaN(createdMs) ? "recently" : formatAgo(createdMs);
+          })()}</span>
         </div>
       </div>
     `;
   }
 
   return html`
-    <div class="notif-card ${n.read ? "" : "notif-card--unread"}">
+    <div class="notif-card ${n.read ? "" : "notif-card--unread"}" style="cursor:pointer" @click=${(
+      e: Event,
+    ) => {
+      // Don't navigate if clicking an action button
+      if ((e.target as HTMLElement)?.closest?.("button")) return;
+      // Mark as read + navigate to the card
+      if (n.cardId) {
+        onAction("navigate", { cardId: n.cardId });
+      }
+      if (!n.read && n.id) {
+        onAction("dismiss", { notificationId: n.id });
+      }
+    }}>
       <div class="notif-meta">
         <span class="notif-badge" style="background:${badge.bg};color:${badge.fg}">${badge.label}</span>
-        <span class="notif-time">${formatAgo(new Date(n.createdAt).getTime())}</span>
+        <span class="notif-time">${(() => {
+          const createdMs = new Date(n.createdAt).getTime();
+          return isNaN(createdMs) ? "recently" : formatAgo(createdMs);
+        })()}</span>
       </div>
 
       <div style="font-size:16px;font-weight:600;margin:4px 0">${n.title}</div>
       <div class="notif-summary">${n.summary}</div>
 
-      ${n.progress && n.progress.total > 0 ? html`
+      ${
+        n.progress && n.progress.total > 0
+          ? html`
         <div class="notif-progress">
           <div class="notif-progress-bar" style="width:${pct}%"></div>
         </div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${n.progress.done}/${n.progress.total} checklist items</div>
-      ` : nothing}
+      `
+          : nothing
+      }
 
-      ${n.description && n.type !== "completed" ? html`
+      ${
+        n.description && n.type !== "completed"
+          ? html`
         <div class="notif-desc">${stripMarkdown(n.description).slice(0, 300)}${n.description.length > 300 ? "…" : ""}</div>
-      ` : nothing}
+      `
+          : nothing
+      }
 
-      ${n.actions.length > 0 ? html`
+      ${
+        n.actions.length > 0
+          ? html`
         <div class="notif-actions">
-          ${n.actions.map((a) => html`
+          ${n.actions.map(
+            (a) => html`
             <button
               class="notif-btn ${a.style === "primary" ? "notif-btn--approve" : a.style === "danger" ? "notif-btn--reject" : "notif-btn--default"}"
               @click=${() => onAction(a.action, a.params)}
             >${a.label}</button>
-          `)}
+          `,
+          )}
         </div>
-      ` : nothing}
+      `
+          : nothing
+      }
     </div>
   `;
 }

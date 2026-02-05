@@ -1,5 +1,6 @@
 import { normalizeVerboseLevel } from "../auto-reply/thinking.js";
 import { loadConfig } from "../config/config.js";
+import { updateSessionStoreEntry } from "../config/sessions/store.js";
 import { type AgentEventPayload, getAgentRunContext } from "../infra/agent-events.js";
 import { resolveHeartbeatVisibility } from "../infra/heartbeat-visibility.js";
 import { loadSessionEntry } from "./session-utils.js";
@@ -235,6 +236,30 @@ export function createAgentEventHandler({
     }
   };
 
+  /** Best-effort: persist run status to session store so restarts can detect interrupted runs. */
+  const recordRunStatus = (
+    sessionKey: string,
+    runId: string,
+    status: "running" | "completed" | "error" | "aborted",
+  ) => {
+    try {
+      const { storePath } = loadSessionEntry(sessionKey);
+      const now = Date.now();
+      updateSessionStoreEntry({
+        storePath,
+        sessionKey,
+        update: async (entry) => ({
+          lastRunId: runId,
+          lastRunStatus: status,
+          lastRunStartedAt: status === "running" ? now : entry.lastRunStartedAt,
+          lastRunEndedAt: status === "running" ? undefined : now,
+        }),
+      }).catch(() => {});
+    } catch {
+      // Best-effort — don't break the event pipeline
+    }
+  };
+
   return (evt: AgentEventPayload) => {
     const chatLink = chatRunState.registry.peek(evt.runId);
     const sessionKey = chatLink?.sessionKey ?? resolveSessionKeyForRun(evt.runId);
@@ -266,6 +291,11 @@ export function createAgentEventHandler({
 
     const lifecyclePhase =
       evt.stream === "lifecycle" && typeof evt.data?.phase === "string" ? evt.data.phase : null;
+
+    // Record run status transitions for restart recovery
+    if (sessionKey && lifecyclePhase === "start") {
+      recordRunStatus(sessionKey, clientRunId, "running");
+    }
 
     if (sessionKey) {
       nodeSendToSession(sessionKey, "agent", agentPayload);
@@ -306,6 +336,14 @@ export function createAgentEventHandler({
     }
 
     if (lifecyclePhase === "end" || lifecyclePhase === "error") {
+      if (sessionKey) {
+        const endStatus = isAborted
+          ? "aborted"
+          : lifecyclePhase === "error"
+            ? "error"
+            : "completed";
+        recordRunStatus(sessionKey, clientRunId, endStatus);
+      }
       clearAgentRunContext(evt.runId);
     }
   };

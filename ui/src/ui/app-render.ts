@@ -55,6 +55,7 @@ import { icons } from "./icons.ts";
 import { TAB_GROUPS, subtitleForTab, titleForTab } from "./navigation.ts";
 import { ConfigUiHints } from "./types.ts";
 import { renderAgents } from "./views/agents.ts";
+import { renderAudit } from "./views/audit.ts";
 import { renderChannels } from "./views/channels.ts";
 import { renderChat } from "./views/chat.ts";
 import { renderConfig } from "./views/config.ts";
@@ -66,12 +67,12 @@ import { renderInstances } from "./views/instances.ts";
 import { renderIssues } from "./views/issues.ts";
 import { renderLogs } from "./views/logs.ts";
 import { renderMetrics } from "./views/metrics.ts";
-import { renderSprints } from "./views/sprints.ts";
 import { renderNodes } from "./views/nodes.ts";
-import { renderOverview } from "./views/overview.ts";
 import { renderNotifications } from "./views/notifications.ts";
+import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
+import { renderSprints } from "./views/sprints.ts";
 import { renderSwarm } from "./views/swarm.ts";
 import { renderTaskQueue } from "./views/task-queue.ts";
 
@@ -146,22 +147,26 @@ export function renderApp(state: AppViewState) {
           </div>
           ${state.permissionsData?.configured ? html`<span class="topbar-level" title="Autonomy: ${state.permissionsData.levelLabel} · ${state.permissionsData.role}">${state.permissionsData.levelLabel}</span>` : nothing}
           <button
-            class="topbar-autorun ${state.permissionsData?.autoRun ? 'topbar-autorun--active' : 'topbar-autorun--idle'}"
+            class="topbar-autorun ${state.permissionsData?.autoRun ? "topbar-autorun--active" : "topbar-autorun--idle"}"
             @click=${async () => {
               if (state.permissionsData?.autoRun) {
-                if (confirm('Kill switch: Stop ALL activity and disable auto-run?')) {
-                  await (state as any).client?.request('permissions.killSwitch', {});
+                if (confirm("Kill switch: Stop ALL activity and disable auto-run?")) {
+                  await (state as any).client?.request("permissions.killSwitch", {});
                   await (state as any).loadPermissions?.();
                 }
               } else {
-                await (state as any).client?.request('permissions.toggleAutoRun', { enabled: true });
+                await (state as any).client?.request("permissions.toggleAutoRun", {
+                  enabled: true,
+                });
                 await (state as any).loadPermissions?.();
               }
             }}
-            title="${state.permissionsData?.autoRun
-              ? `KILL SWITCH — Stop all activity\nLevel: ${state.permissionsData?.levelLabel ?? '?'}\nEpochs: ${state.permissionsData?.approvedEpochs?.join(', ') ?? 'none'}`
-              : `Enable auto-run\nLevel: ${state.permissionsData?.levelLabel ?? '?'}\nEpochs: ${state.permissionsData?.approvedEpochs?.join(', ') ?? 'none'}`}"
-          ><span class="topbar-autorun__icon">${state.permissionsData?.autoRun ? '🛑' : '▶️'}</span><span class="topbar-autorun__label">${state.permissionsData?.autoRun ? 'STOP' : 'Start'}</span></button>
+            title="${
+              state.permissionsData?.autoRun
+                ? `KILL SWITCH — Stop all activity\nLevel: ${state.permissionsData?.levelLabel ?? "?"}\nEpochs: ${state.permissionsData?.approvedEpochs?.join(", ") ?? "none"}`
+                : `Enable auto-run\nLevel: ${state.permissionsData?.levelLabel ?? "?"}\nEpochs: ${state.permissionsData?.approvedEpochs?.join(", ") ?? "none"}`
+            }"
+          ><span class="topbar-autorun__icon">${state.permissionsData?.autoRun ? "🛑" : "▶️"}</span><span class="topbar-autorun__label">${state.permissionsData?.autoRun ? "STOP" : "Start"}</span></button>
           <button
             class="topbar-notif"
             @click=${() => {
@@ -171,9 +176,11 @@ export function renderApp(state: AppViewState) {
             title="Notifications"
           >
             <span class="topbar-notif__icon">🔔</span>
-            ${(state.notificationsData?.unreadCount ?? 0) > 0
-              ? html`<span class="topbar-notif__badge">${state.notificationsData!.unreadCount}</span>`
-              : nothing}
+            ${
+              (state.notificationsData?.unreadCount ?? 0) > 0
+                ? html`<span class="topbar-notif__badge">${state.notificationsData!.unreadCount}</span>`
+                : nothing
+            }
           </button>
           ${renderThemeToggle(state)}
         </div>
@@ -235,7 +242,9 @@ export function renderApp(state: AppViewState) {
           </div>
         </section>
 
-        ${state.pwaInstallPrompt && !state.pwaInstallDismissed ? html`
+        ${
+          state.pwaInstallPrompt && !state.pwaInstallDismissed
+            ? html`
           <div class="pwa-banner">
             <span>📱 Install OpenClaw as an app for quick access</span>
             <button class="pwa-install-btn" @click=${() => state.installPwa()}>Install</button>
@@ -259,7 +268,9 @@ export function renderApp(state: AppViewState) {
             }
             .pwa-dismiss-btn:hover { opacity: 0.8; }
           </style>
-        ` : nothing}
+        `
+            : nothing
+        }
 
         ${
           state.tab === "overview"
@@ -424,8 +435,50 @@ export function renderApp(state: AppViewState) {
             ? renderSwarm({
                 loading: state.swarmLoading,
                 hierarchy: state.swarmHierarchy,
+                snapshot: state.swarmSnapshot,
                 error: state.swarmError,
+                selectedAgent: state.selectedAgent,
+                selectedAgentLoading: state.selectedAgentLoading,
                 onRefresh: () => state.loadSwarmHierarchy(),
+                onSelectAgent: (id: string) => state.loadAgentDetail(id),
+                onCloseAgent: () => {
+                  state.selectedAgent = null;
+                },
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "audit"
+            ? renderAudit({
+                loading: state.auditLoading,
+                error: state.auditError,
+                instances: state.auditInstances,
+                entries: state.auditEntries,
+                entriesTotal: state.auditEntriesTotal,
+                rawLogs: state.auditRawLogs,
+                summary: state.auditSummary,
+                selectedInstanceId: state.auditSelectedInstanceId,
+                viewMode: state.auditViewMode,
+                filterAgent: state.auditFilterAgent,
+                onRefresh: () => state.loadAuditData(),
+                onSelectInstance: (id: string | null) => {
+                  state.auditSelectedInstanceId = id;
+                  state.auditRawLogs = null;
+                  state.auditSummary = null;
+                  state.loadAuditData();
+                },
+                onChangeViewMode: (mode: import("./views/audit.ts").AuditViewMode) => {
+                  state.auditViewMode = mode;
+                  state.auditRawLogs = null;
+                  state.auditSummary = null;
+                  state.loadAuditData();
+                },
+                onFilterAgent: (agentId: string | null) => {
+                  state.auditFilterAgent = agentId;
+                  state.auditSelectedInstanceId = null;
+                  state.loadAuditData();
+                },
               })
             : nothing
         }
@@ -447,7 +500,8 @@ export function renderApp(state: AppViewState) {
                 costComparisons: state.costComparisons,
                 costSummary: state.costSummary,
                 modelRecommendations: state.modelRecommendations,
-                onEstimateCost: (cardId: string, description: string) => state.estimateCardCost(cardId, description),
+                onEstimateCost: (cardId: string, description: string) =>
+                  state.estimateCardCost(cardId, description),
                 onRefresh: () => state.loadTaskQueue(),
                 onSelectCard: (cardId: string) => state.selectTaskQueueCard(cardId),
                 onCloseDetail: () => state.closeTaskQueueDetail(),

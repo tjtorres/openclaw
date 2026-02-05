@@ -119,6 +119,12 @@ const BASE_METHODS = [
   "swarm.status",
   "swarm.list",
   "swarm.hierarchy",
+  "swarm.agentDetail",
+  "audit.list",
+  "audit.instances",
+  "audit.logs",
+  "audit.summary",
+  "events.list",
   "trust.profile",
   "trust.log",
   // Costs
@@ -148,6 +154,8 @@ const BASE_METHODS = [
   "chat.history",
   "chat.abort",
   "chat.send",
+  // Worker Health
+  "worker.health",
 ];
 
 export function listGatewayMethods(): string[] {

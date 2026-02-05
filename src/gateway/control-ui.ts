@@ -160,6 +160,7 @@ interface ControlUiInjectionOpts {
 
 function injectControlUiConfig(html: string, opts: ControlUiInjectionOpts): string {
   const { basePath, assistantName, assistantAvatar } = opts;
+  const isStaging = process.env.OPENCLAW_SERVICE_VERSION?.includes("staging");
   const script =
     `<script>` +
     `window.__OPENCLAW_CONTROL_UI_BASE_PATH__=${JSON.stringify(basePath)};` +
@@ -169,16 +170,54 @@ function injectControlUiConfig(html: string, opts: ControlUiInjectionOpts): stri
     `window.__OPENCLAW_ASSISTANT_AVATAR__=${JSON.stringify(
       assistantAvatar ?? DEFAULT_ASSISTANT_IDENTITY.avatar,
     )};` +
+    `window.__OPENCLAW_SERVICE_VERSION__=${JSON.stringify(process.env.OPENCLAW_SERVICE_VERSION ?? "production")};` +
     `</script>`;
+
+  // Add staging banner if running in staging
+  let stagingBanner = "";
+  if (isStaging) {
+    stagingBanner = `<div style="
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #ef4444;
+      color: white;
+      text-align: center;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 9999;
+      letter-spacing: 0.5px;
+    ">⚠️ STAGING ENVIRONMENT ⚠️</div>
+    <div style="height: 32px;"></div>`;
+  }
+
   // Check if already injected
   if (html.includes("__OPENCLAW_ASSISTANT_NAME__")) {
     return html;
   }
   const headClose = html.indexOf("</head>");
+
   if (headClose !== -1) {
-    return `${html.slice(0, headClose)}${script}${html.slice(headClose)}`;
+    // Inject script before </head>
+    html = `${html.slice(0, headClose)}${script}${html.slice(headClose)}`;
+
+    // If staging, inject banner after <body>
+    if (isStaging) {
+      const bodyOpen = html.indexOf("<body");
+      if (bodyOpen !== -1) {
+        const bodyClose = html.indexOf(">", bodyOpen);
+        if (bodyClose !== -1) {
+          html = `${html.slice(0, bodyClose + 1)}${stagingBanner}${html.slice(bodyClose + 1)}`;
+        }
+      }
+    }
+  } else {
+    html = `${script}${html}`;
   }
-  return `${script}${html}`;
+
+  return html;
 }
 
 interface ServeIndexHtmlOpts {

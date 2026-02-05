@@ -1,5 +1,4 @@
 import { html, nothing } from "lit";
-import { formatTime as fmtTime, timeAgo as relTime, formatDateTime, tzAbbrev } from "../time-format.js";
 import type {
   CardMetrics,
   CostEstimate,
@@ -12,6 +11,12 @@ import type {
   TaskQueueSnapshot,
 } from "../task-queue-types.ts";
 import type { ActivityEntry, ActivityFeedData } from "./activity-feed.ts";
+import {
+  formatTime as fmtTime,
+  timeAgo as relTime,
+  formatDateTime,
+  tzAbbrev,
+} from "../time-format.js";
 
 export type TaskQueueProps = {
   loading: boolean;
@@ -93,7 +98,10 @@ function renderProgressBar(checked: number, total: number) {
   `;
 }
 
-function renderCostBadge(estimate: CostEstimate | undefined, comparison: CostComparison | undefined) {
+function renderCostBadge(
+  estimate: CostEstimate | undefined,
+  comparison: CostComparison | undefined,
+) {
   if (comparison?.actual_cost_usd != null && comparison.estimated_cost_usd != null) {
     // Show actual vs estimated
     const ratio = comparison.accuracy_ratio ?? 1;
@@ -104,7 +112,12 @@ function renderCostBadge(estimate: CostEstimate | undefined, comparison: CostCom
     </span>`;
   }
   if (estimate) {
-    const confColor = estimate.confidence === "high" ? "#238636" : estimate.confidence === "medium" ? "#d29922" : "#6e7681";
+    const confColor =
+      estimate.confidence === "high"
+        ? "#238636"
+        : estimate.confidence === "medium"
+          ? "#d29922"
+          : "#6e7681";
     return html`<span class="tq-cost-badge tq-cost-estimate" style="border-color:${confColor}" title="${estimate.complexity} · ${estimate.confidence} confidence · $${estimate.range.low.toFixed(2)}-$${estimate.range.high.toFixed(2)}">
       💰 ~$${estimate.estimated_cost_usd.toFixed(2)}
     </span>`;
@@ -112,7 +125,13 @@ function renderCostBadge(estimate: CostEstimate | undefined, comparison: CostCom
   return nothing;
 }
 
-function renderCard(card: TaskQueueCard, isSelected: boolean, onSelect: (id: string) => void, costEstimate?: CostEstimate, costComparison?: CostComparison) {
+function renderCard(
+  card: TaskQueueCard,
+  isSelected: boolean,
+  onSelect: (id: string) => void,
+  costEstimate?: CostEstimate,
+  costComparison?: CostComparison,
+) {
   const hasProgress = card.checkItems > 0;
   return html`
     <div class="tq-card ${isSelected ? "tq-card-selected" : ""}" @click=${() => onSelect(card.id)}>
@@ -134,7 +153,7 @@ function renderCard(card: TaskQueueCard, isSelected: boolean, onSelect: (id: str
               : nothing
           }
         </div>
-        <span class="tq-card-time">${timeAgo(card.dateLastActivity)}</span>
+        <span class="tq-card-time">${card.dateLastActivity ? timeAgo(card.dateLastActivity) : ""}</span>
       </div>
       ${
         card.labels.length > 0
@@ -173,7 +192,15 @@ function renderColumn(
             ? html`
                 <div class="tq-empty">No cards</div>
               `
-            : display.map((c) => renderCard(c, c.id === selectedCardId, onSelect, costEstimates?.get(c.id), costComparisons?.get(c.id)))
+            : display.map((c) =>
+                renderCard(
+                  c,
+                  c.id === selectedCardId,
+                  onSelect,
+                  costEstimates?.get(c.id),
+                  costComparisons?.get(c.id),
+                ),
+              )
         }
         ${
           hidden > 0
@@ -197,10 +224,12 @@ function fmtTokens(n: number): string {
 
 function renderCardMetrics(metrics: CardMetrics | null, loading: boolean) {
   if (loading) {
-    return html`<div class="tq-section">
-      <div class="tq-section-title">📊 Metrics</div>
-      <div class="tq-muted">Loading metrics…</div>
-    </div>`;
+    return html`
+      <div class="tq-section">
+        <div class="tq-section-title">📊 Metrics</div>
+        <div class="tq-muted">Loading metrics…</div>
+      </div>
+    `;
   }
   if (!metrics || (metrics.totalEvents === 0 && metrics.windows.length === 0)) {
     return nothing;
@@ -226,9 +255,11 @@ function renderCardMetrics(metrics: CardMetrics | null, loading: boolean) {
         <div class="tq-metric-label">API Calls</div>
       </div>
     </div>
-    ${metrics.byModel.length > 0 ? html`
+    ${
+      metrics.byModel.length > 0
+        ? html`
       <div class="tq-model-breakdown">
-        ${metrics.byModel.map(m => {
+        ${metrics.byModel.map((m) => {
           const pct = metrics.totalCost > 0 ? Math.round((m.cost / metrics.totalCost) * 100) : 0;
           return html`
             <div class="tq-model-row">
@@ -240,15 +271,27 @@ function renderCardMetrics(metrics: CardMetrics | null, loading: boolean) {
             </div>`;
         })}
       </div>
-    ` : nothing}
-    ${metrics.windows.length > 0 ? html`
+    `
+        : nothing
+    }
+    ${
+      metrics.windows.length > 0
+        ? html`
       <div class="tq-work-windows">
         <div class="tq-muted" style="font-size:11px;margin-top:8px;">
           ${metrics.windows.length} work session${metrics.windows.length > 1 ? "s" : ""}
-          ${metrics.windows.some(w => !w.end) ? html` — <span style="color:#58a6ff">● active now</span>` : nothing}
+          ${
+            metrics.windows.some((w) => !w.end)
+              ? html`
+                  — <span style="color: #58a6ff">● active now</span>
+                `
+              : nothing
+          }
         </div>
       </div>
-    ` : nothing}
+    `
+        : nothing
+    }
   </div>`;
 }
 
@@ -260,21 +303,28 @@ function renderLiveOutput(
   if (!activityData) return nothing;
 
   const isActiveCard = activityData.currentTask?.cardId === cardId;
-  const cardEntries = activityData.entries.filter(
-    (e: ActivityEntry) => e.cardId === cardId,
-  ).slice(0, 15);
+  const cardEntries = activityData.entries
+    .filter((e: ActivityEntry) => e.cardId === cardId)
+    .slice(0, 15);
 
   if (cardEntries.length === 0 && !isActiveCard) return nothing;
 
   const catColor = (cat: string): string => {
     switch (cat) {
-      case "commit": return "#1f6feb";
-      case "check": return "#238636";
-      case "task": return "#d29922";
-      case "done": return "#238636";
-      case "status": return "#8b949e";
-      case "activate": return "#a371f7";
-      default: return "#8b949e";
+      case "commit":
+        return "#1f6feb";
+      case "check":
+        return "#238636";
+      case "task":
+        return "#d29922";
+      case "done":
+        return "#238636";
+      case "status":
+        return "#8b949e";
+      case "activate":
+        return "#a371f7";
+      default:
+        return "#8b949e";
     }
   };
 
@@ -292,15 +342,23 @@ function renderLiveOutput(
 
   return html`<div class="tq-section">
     <div class="tq-section-title" style="display:flex;align-items:center;gap:8px;">
-      ${isActiveCard && agentStatus === "working"
-        ? html`<span class="tq-live-dot"></span> Live Output`
-        : isActiveCard
-          ? html`<span class="tq-live-dot tq-live-idle"></span> Active Task`
-          : html`📋 Activity Log`
+      ${
+        isActiveCard && agentStatus === "working"
+          ? html`
+              <span class="tq-live-dot"></span> Live Output
+            `
+          : isActiveCard
+            ? html`
+                <span class="tq-live-dot tq-live-idle"></span> Active Task
+              `
+            : html`
+                📋 Activity Log
+              `
       }
     </div>
     <div class="tq-live-entries">
-      ${cardEntries.map((e: ActivityEntry) => html`
+      ${cardEntries.map(
+        (e: ActivityEntry) => html`
         <div class="tq-live-entry">
           <span class="tq-live-icon">${e.icon}</span>
           <span class="tq-live-msg">
@@ -309,10 +367,15 @@ function renderLiveOutput(
           </span>
           <span class="tq-live-ts">${tAgo(e.ts)}</span>
         </div>
-      `)}
-      ${cardEntries.length === 0 ? html`
-        <div class="tq-live-empty">Waiting for activity…</div>
-      ` : nothing}
+      `,
+      )}
+      ${
+        cardEntries.length === 0
+          ? html`
+              <div class="tq-live-empty">Waiting for activity…</div>
+            `
+          : nothing
+      }
     </div>
   </div>`;
 }
@@ -337,15 +400,17 @@ function renderModelRecommendation(rec: ModelRecommendation | undefined) {
         <span class="tq-router-score">${rec.recommended_score.toFixed(0)}pts</span>
       </div>
       <div class="tq-router-rankings">
-        ${rec.rankings.slice(0, 4).map((r) => html`
-          <div class="tq-router-rank ${r.model === rec.recommended ? 'tq-router-rank-best' : ''}">
+        ${rec.rankings.slice(0, 4).map(
+          (r) => html`
+          <div class="tq-router-rank ${r.model === rec.recommended ? "tq-router-rank-best" : ""}">
             <span>${tierIcon(r.model)} ${r.model.replace("claude-", "").replace("gpt-5.2-", "").replace("-preview", "")}</span>
             <span class="tq-router-rank-bar-container">
               <span class="tq-router-rank-bar" style="width:${r.score}%"></span>
             </span>
             <span class="tq-router-rank-score">${r.score.toFixed(0)}</span>
           </div>
-        `)}
+        `,
+        )}
       </div>
       <div class="tq-router-reason">${rec.reasoning}</div>
     </div>
@@ -394,7 +459,8 @@ function renderCostSection(
   }
 
   if (estimate) {
-    const confDot = estimate.confidence === "high" ? "🟢" : estimate.confidence === "medium" ? "🟡" : "⚪";
+    const confDot =
+      estimate.confidence === "high" ? "🟢" : estimate.confidence === "medium" ? "🟡" : "⚪";
     return html`<div class="tq-section">
       <div class="tq-section-title">💰 Cost Estimate</div>
       <div class="tq-cost-detail">
@@ -988,11 +1054,19 @@ export function renderTaskQueue(props: TaskQueueProps) {
           </button>
           <span class="tq-muted" style="font-size:11px;">
             ${fmtTime(snap.fetchedAt)}
-            ${(snap as Record<string, unknown>).isStale
-              ? html`<span style="color:#da3633;margin-left:6px;" title="Data may be outdated — sync hasn't run recently">⚠️ stale</span>`
-              : (snap as Record<string, unknown>).lastSynced
-                ? html`<span style="color:#7d8590;margin-left:6px;" title="Last Trello sync">· synced ${timeAgo((snap as Record<string, unknown>).lastSynced as string)}</span>`
-                : nothing}
+            ${
+              (snap as Record<string, unknown>).isStale
+                ? html`
+                    <span
+                      style="color: #da3633; margin-left: 6px"
+                      title="Data may be outdated — sync hasn't run recently"
+                      >⚠️ stale</span
+                    >
+                  `
+                : (snap as Record<string, unknown>).lastSynced
+                  ? html`<span style="color:#7d8590;margin-left:6px;" title="Last Trello sync">· synced ${timeAgo((snap as Record<string, unknown>).lastSynced as string)}</span>`
+                  : nothing
+            }
           </span>
         </div>
       </div>
@@ -1005,7 +1079,14 @@ export function renderTaskQueue(props: TaskQueueProps) {
 
     <div class="tq-board">
       ${cols.map((col) =>
-        renderColumn(col, byList.get(col) ?? [], props.selectedCardId, props.onSelectCard, props.costEstimates, props.costComparisons),
+        renderColumn(
+          col,
+          byList.get(col) ?? [],
+          props.selectedCardId,
+          props.onSelectCard,
+          props.costEstimates,
+          props.costComparisons,
+        ),
       )}
     </div>
 

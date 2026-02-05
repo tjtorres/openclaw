@@ -60,7 +60,9 @@ export const pushHandlers: GatewayRequestHandlers = {
   },
 
   "push.subscribe": ({ params, respond }) => {
-    const { subscription } = params as { subscription?: { endpoint: string; keys: { p256dh: string; auth: string } } };
+    const { subscription } = params as {
+      subscription?: { endpoint: string; keys: { p256dh: string; auth: string } };
+    };
     if (!subscription?.endpoint || !subscription?.keys) {
       respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "subscription required"));
       return;
@@ -84,11 +86,13 @@ export const pushHandlers: GatewayRequestHandlers = {
 
   "push.test": ({ respond }) => {
     // Trigger a test push
-    void sendPush("Test Notification", "Push notifications are working! 🎉", "alert").then(() => {
-      respond(true, { ok: true });
-    }).catch((err) => {
-      respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, String(err)));
-    });
+    void sendPush("Test Notification", "Push notifications are working! 🎉", "alert")
+      .then(() => {
+        respond(true, { ok: true });
+      })
+      .catch((err) => {
+        respond(false, undefined, errorShape(ErrorCodes.INTERNAL_ERROR, String(err)));
+      });
   },
 };
 
@@ -107,26 +111,37 @@ export async function sendPush(
 
   let webPush: typeof import("web-push");
   try {
-    webPush = await import("web-push");
+    const mod = await import("web-push");
+    // Dynamic import of CJS module: setVapidDetails lives on .default
+    webPush = (mod as any).default ?? mod;
   } catch {
     // web-push not installed — skip silently
     console.log("[push] web-push package not available, skipping push notification");
     return;
   }
 
-  webPush.setVapidDetails("mailto:agent@openclaw.local", keys.publicKey, keys.privateKey);
+  webPush.setVapidDetails("mailto:jeevesautomation@gmail.com", keys.publicKey, keys.privateKey);
 
   const { getTasksDb: getDb } = await import("./tasks-db.js");
   const db = getDb();
   if (!db) return;
 
-  const subs = db.prepare("SELECT endpoint, keys_p256dh, keys_auth FROM push_subscriptions").all() as Array<{
+  const subs = db
+    .prepare("SELECT endpoint, keys_p256dh, keys_auth FROM push_subscriptions")
+    .all() as Array<{
     endpoint: string;
     keys_p256dh: string;
     keys_auth: string;
   }>;
 
-  const payload = JSON.stringify({ title, body, type, cardId, actions, tag: `notif-${type}-${cardId || Date.now()}` });
+  const payload = JSON.stringify({
+    title,
+    body,
+    type,
+    cardId,
+    actions,
+    tag: `notif-${type}-${cardId || Date.now()}`,
+  });
 
   for (const sub of subs) {
     try {
@@ -139,7 +154,13 @@ export async function sendPush(
       );
     } catch (err: unknown) {
       // Remove expired/invalid subscriptions
-      if (err && typeof err === "object" && "statusCode" in err && ((err as { statusCode: number }).statusCode === 410 || (err as { statusCode: number }).statusCode === 404)) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "statusCode" in err &&
+        ((err as { statusCode: number }).statusCode === 410 ||
+          (err as { statusCode: number }).statusCode === 404)
+      ) {
         const wdb = getTasksDbWritable();
         if (wdb) {
           wdb.prepare("DELETE FROM push_subscriptions WHERE endpoint=?").run(sub.endpoint);

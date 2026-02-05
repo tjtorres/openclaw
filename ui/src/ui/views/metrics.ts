@@ -123,11 +123,15 @@ export type EpochCostData = {
   total_cards: number;
 };
 
-function formatCost(n: number): string {
-  return `$${n.toFixed(2)}`;
+function formatCost(cost: number | null | undefined): string {
+  if (cost == null || isNaN(cost)) return "—";
+  if (cost === 0) return "$0.00";
+  return "$" + cost.toFixed(4);
 }
 
 function formatTokens(n: number): string {
+  if (n == null || isNaN(n)) return "—";
+  if (!isFinite(n)) return "∞";
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -269,15 +273,17 @@ function renderDayDetail(
     return html`
       <div class="muted" style="padding: 12px">Loading day detail…</div>
     `;
-  const s = detail.summary as Record<string, number>;
+  const s = detail.summary as Record<string, unknown>;
+  const cost = typeof s?.cost === "number" ? s.cost : 0;
+  const events = typeof s?.events === "number" ? s.events : 0;
   const maxModel = Math.max(...detail.byModel.map((m) => m.cost), 0.01);
   return html`
     <div class="m-detail-section">
       <div class="m-detail-header">
         <span class="m-detail-model">${detail.day}</span>
-        <span class="m-detail-stat">${formatCost(s.cost ?? 0)} total</span>
-        <span class="m-detail-stat">${(s.events ?? 0).toLocaleString()} events</span>
-        <span class="m-detail-stat">${formatTokens(Number(s.input_tokens ?? 0))} in / ${formatTokens(Number(s.output_tokens ?? 0))} out</span>
+        <span class="m-detail-stat">${formatCost(cost)} total</span>
+        <span class="m-detail-stat">${events.toLocaleString()} events</span>
+        <span class="m-detail-stat">${formatTokens(Number(s?.input_tokens ?? 0))} in / ${formatTokens(Number(s?.output_tokens ?? 0))} out</span>
       </div>
       <div class="m-detail-label">By model</div>
       <div class="m-table" style="margin-bottom:12px">
@@ -289,7 +295,7 @@ function renderDayDetail(
               <div style="width:${Math.max(2, (m.cost / maxModel) * 100)}%;height:14px;background:#1f6feb;border-radius:3px"></div>
             </div>
             <div class="m-model-cost">${formatCost(m.cost)}</div>
-            <div class="m-model-pct">${s.cost ? Math.round((m.cost / s.cost) * 100) : 0}%</div>
+            <div class="m-model-pct">${cost ? Math.round((m.cost / cost) * 100) : 0}%</div>
             <div class="m-model-events">${m.events} calls</div>
           </div>
         `,
@@ -660,13 +666,18 @@ export function renderMetrics(props: MetricsProps) {
     }
 
     <!-- Cost estimation accuracy -->
-    ${props.costAccuracy && props.costAccuracy.completed > 0 ? (() => {
-      const ca = props.costAccuracy;
-      const accPct = ca.avg_accuracy_ratio > 0 ? Math.round((1 - Math.abs(1 - ca.avg_accuracy_ratio)) * 100) : 0;
-      const accColor = accPct >= 80 ? "#66bb6a" : accPct >= 60 ? "#ffa726" : "#ef5350";
-      const variance = ca.total_actual_usd - ca.total_estimated_usd;
-      const varianceDir = variance > 0 ? "over" : "under";
-      return html`
+    ${
+      props.costAccuracy && props.costAccuracy.completed > 0
+        ? (() => {
+            const ca = props.costAccuracy;
+            const accPct =
+              ca.avg_accuracy_ratio > 0
+                ? Math.round((1 - Math.abs(1 - ca.avg_accuracy_ratio)) * 100)
+                : 0;
+            const accColor = accPct >= 80 ? "#66bb6a" : accPct >= 60 ? "#ffa726" : "#ef5350";
+            const variance = ca.total_actual_usd - ca.total_estimated_usd;
+            const varianceDir = variance > 0 ? "over" : "under";
+            return html`
         <div class="m-section">
           <div class="m-section-header">
             <div class="m-section-title">Cost Estimation Accuracy</div>
@@ -686,18 +697,23 @@ export function renderMetrics(props: MetricsProps) {
               <div class="m-stat-label">Actual</div>
             </div>
             <div class="m-stat-card">
-              <div class="m-stat-value" style="color:${variance > 0 ? '#ef5350' : '#66bb6a'}">${variance > 0 ? '+' : ''}${formatCost(variance)}</div>
+              <div class="m-stat-value" style="color:${variance > 0 ? "#ef5350" : "#66bb6a"}">${variance > 0 ? "+" : ""}${formatCost(variance)}</div>
               <div class="m-stat-label">Variance (${varianceDir})</div>
             </div>
           </div>
-          ${ca.recent.filter((r) => r.status === "completed" && r.estimated > 0 && r.actual > 0).length > 0 ? html`
+          ${
+            ca.recent.filter((r) => r.status === "completed" && r.estimated > 0 && r.actual > 0)
+              .length > 0
+              ? html`
             <div class="m-accuracy-chart">
-              ${ca.recent.filter((r) => r.status === "completed" && r.estimated > 0 && r.actual > 0).map((r) => {
-                const ratio = r.actual / r.estimated;
-                const rColor = ratio <= 1.1 ? "#66bb6a" : ratio <= 1.5 ? "#ffa726" : "#ef5350";
-                const estBar = 50; // estimated is always 50% baseline
-                const actBar = Math.min(100, Math.round(ratio * 50));
-                return html`
+              ${ca.recent
+                .filter((r) => r.status === "completed" && r.estimated > 0 && r.actual > 0)
+                .map((r) => {
+                  const ratio = r.actual / r.estimated;
+                  const rColor = ratio <= 1.1 ? "#66bb6a" : ratio <= 1.5 ? "#ffa726" : "#ef5350";
+                  const estBar = 50; // estimated is always 50% baseline
+                  const actBar = Math.min(100, Math.round(ratio * 50));
+                  return html`
                   <div class="m-accuracy-row">
                     <span class="m-accuracy-name" title="${r.name}">${r.name}</span>
                     <span class="m-accuracy-bars">
@@ -707,7 +723,7 @@ export function renderMetrics(props: MetricsProps) {
                     <span class="m-accuracy-ratio" style="color:${rColor}">${(ratio * 100).toFixed(0)}%</span>
                   </div>
                 `;
-              })}
+                })}
               <div style="display:flex;gap:12px;font-size:10px;opacity:0.4;margin-top:4px">
                 <span>▬ estimated</span>
                 <span style="color:#66bb6a">▬ actual (≤110%)</span>
@@ -715,23 +731,33 @@ export function renderMetrics(props: MetricsProps) {
                 <span style="color:#ef5350">▬ actual (>150%)</span>
               </div>
             </div>
-          ` : nothing}
-          ${ca.calibration.last_calibrated ? html`
+          `
+              : nothing
+          }
+          ${
+            ca.calibration.last_calibrated
+              ? html`
             <div style="font-size:11px;opacity:0.4;margin-top:8px">
               Calibrated: ${formatTime(new Date(ca.calibration.last_calibrated).getTime())}
               · ${ca.calibration.total_samples ?? 0} samples
             </div>
-          ` : html`
-            <div style="font-size:11px;opacity:0.4;margin-top:8px">
-              Not yet calibrated — need more completed tasks with cost tracking
-            </div>
-          `}
+          `
+              : html`
+                  <div style="font-size: 11px; opacity: 0.4; margin-top: 8px">
+                    Not yet calibrated — need more completed tasks with cost tracking
+                  </div>
+                `
+          }
         </div>
       `;
-    })() : nothing}
+          })()
+        : nothing
+    }
 
     <!-- Epoch cost breakdown -->
-    ${props.epochCosts && props.epochCosts.epochs.length > 0 ? html`
+    ${
+      props.epochCosts && props.epochCosts.epochs.length > 0
+        ? html`
       <div class="m-section">
         <div class="m-section-header">
           <div class="m-section-title">Cost by Epoch</div>
@@ -740,7 +766,10 @@ export function renderMetrics(props: MetricsProps) {
         <div class="m-epoch-grid">
           ${props.epochCosts.epochs.map((e) => {
             const total = e.actual_total || e.estimated_total;
-            const maxCost = Math.max(...props.epochCosts!.epochs.map((x) => x.actual_total || x.estimated_total), 1);
+            const maxCost = Math.max(
+              ...props.epochCosts!.epochs.map((x) => x.actual_total || x.estimated_total),
+              1,
+            );
             const barPct = Math.round((total / maxCost) * 100);
             return html`
               <div class="m-epoch-row">
@@ -760,7 +789,9 @@ export function renderMetrics(props: MetricsProps) {
           <span>Total actual: ${formatCost(props.epochCosts.total_actual)}</span>
         </div>
       </div>
-    ` : nothing}
+    `
+        : nothing
+    }
 
     <div class="m-refresh-bar">
       <button class="btn" ?disabled=${props.loading} @click=${props.onRefresh}>

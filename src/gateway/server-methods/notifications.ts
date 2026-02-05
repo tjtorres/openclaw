@@ -4,8 +4,8 @@
  * Each notification answers: What is it? Why does it matter? What do you need to do?
  */
 import type { GatewayRequestHandlers } from "./types.js";
-import { getTasksDb, getChecklistProgress } from "./tasks-db.js";
 import { sendPush } from "./push.js";
+import { getTasksDb, getChecklistProgress } from "./tasks-db.js";
 
 export type Notification = {
   id: string;
@@ -39,22 +39,69 @@ export type NotificationsResult = {
 function extractSummary(desc: string | null, maxLen = 180): string {
   if (!desc) return "";
   // Skip markdown headers, empty lines
-  const lines = desc.split("\n").filter((l) => l.trim() && !l.startsWith("#") && !l.startsWith("---"));
+  const lines = desc
+    .split("\n")
+    .filter((l) => l.trim() && !l.startsWith("#") && !l.startsWith("---"));
   const first = lines.slice(0, 3).join(" ").trim();
   return first.length > maxLen ? first.slice(0, maxLen) + "…" : first;
 }
 
-/** Track which notification IDs have been dismissed/seen. In-memory is fine — resets on gateway restart. */
+/**
+ * Track which notification IDs have been dismissed/seen.
+ * Persisted to SQLite so state survives gateway restarts.
+ */
 const seenNotifications = new Set<string>();
-
-/** Track which cards have already had a push notification sent (prevent duplicates). */
 const pushedNotifications = new Set<string>();
+
+// Load seen/pushed state from DB on startup
+try {
+  const { getTasksDb: _getDb } = require("./tasks-db.js");
+  const _db = _getDb();
+  if (_db) {
+    try {
+      _db.exec(
+        "CREATE TABLE IF NOT EXISTS notification_state (id TEXT PRIMARY KEY, type TEXT, created_at TEXT DEFAULT (datetime('now')))",
+      );
+    } catch {}
+    const rows = _db.prepare("SELECT id, type FROM notification_state").all() as Array<{
+      id: string;
+      type: string;
+    }>;
+    for (const r of rows) {
+      if (r.type === "seen") seenNotifications.add(r.id);
+      if (r.type === "pushed") pushedNotifications.add(r.id);
+    }
+  }
+} catch {
+  /* DB not available on startup — will init lazily */
+}
+
+function persistNotificationState(id: string, type: "seen" | "pushed") {
+  try {
+    const { getTasksDbWritable } = require("./tasks-db.js");
+    const db = getTasksDbWritable();
+    if (db) {
+      try {
+        db.exec(
+          "CREATE TABLE IF NOT EXISTS notification_state (id TEXT PRIMARY KEY, type TEXT, created_at TEXT DEFAULT (datetime('now')))",
+        );
+      } catch {}
+      db.prepare("INSERT OR REPLACE INTO notification_state (id, type) VALUES (?, ?)").run(
+        id,
+        type,
+      );
+    }
+  } catch {
+    /* best-effort */
+  }
+}
 
 export const notificationsHandlers: GatewayRequestHandlers = {
   "notifications.dismiss": ({ params, respond }) => {
     const { notificationId } = params as { notificationId?: string };
     if (notificationId) {
       seenNotifications.add(notificationId);
+      persistNotificationState(notificationId, "seen");
     }
     respond(true, { ok: true });
   },
@@ -64,10 +111,20 @@ export const notificationsHandlers: GatewayRequestHandlers = {
     // Mark everything currently known as seen
     const db = getTasksDb();
     if (db) {
-      const proposed = db.prepare("SELECT id FROM cards c JOIN lists l ON c.list_id=l.id WHERE l.name='Proposed'").all() as Array<{ id: string }>;
-      const blocked = db.prepare("SELECT id FROM cards c JOIN lists l ON c.list_id=l.id WHERE l.name='Blocked'").all() as Array<{ id: string }>;
-      for (const c of proposed) seenNotifications.add(`proposal-${c.id}`);
-      for (const c of blocked) seenNotifications.add(`blocked-${c.id}`);
+      const proposed = db
+        .prepare("SELECT id FROM cards c JOIN lists l ON c.list_id=l.id WHERE l.name='Proposed'")
+        .all() as Array<{ id: string }>;
+      const blocked = db
+        .prepare("SELECT id FROM cards c JOIN lists l ON c.list_id=l.id WHERE l.name='Blocked'")
+        .all() as Array<{ id: string }>;
+      for (const c of proposed) {
+        seenNotifications.add(`proposal-${c.id}`);
+        persistNotificationState(`proposal-${c.id}`, "seen");
+      }
+      for (const c of blocked) {
+        seenNotifications.add(`blocked-${c.id}`);
+        persistNotificationState(`blocked-${c.id}`, "seen");
+      }
     }
     respond(true, { ok: true });
   },
@@ -82,22 +139,26 @@ export const notificationsHandlers: GatewayRequestHandlers = {
     }
 
     // ── Proposed cards — need your approval ──────────────────
-    const proposed = db.prepare(`
+    const proposed = db
+      .prepare(`
       SELECT c.id, c.name, c.description, c.updated_at
       FROM cards c JOIN lists l ON c.list_id = l.id
       WHERE l.name = 'Proposed'
       ORDER BY c.updated_at DESC
-    `).all() as Array<{ id: string; name: string; description: string; updated_at: string }>;
+    `)
+      .all() as Array<{ id: string; name: string; description: string; updated_at: string }>;
 
     for (const card of proposed) {
       const progress = getChecklistProgress(db, card.id);
-      const summary = extractSummary(card.description) || "New task proposal — review and approve to start work.";
+      const summary =
+        extractSummary(card.description) || "New task proposal — review and approve to start work.";
 
       const notifId = `proposal-${card.id}`;
 
       // Send push for new proposals (first time only)
       if (!pushedNotifications.has(notifId) && !seenNotifications.has(notifId)) {
         pushedNotifications.add(notifId);
+        persistNotificationState(notifId, "pushed");
         void sendPush("📋 New Proposal", card.name, "proposal", card.id, [
           { label: "Approve", action: "taskQueue.approveCard", params: { cardId: card.id } },
         ]);
@@ -138,15 +199,18 @@ export const notificationsHandlers: GatewayRequestHandlers = {
     }
 
     // ── Blocked cards — need your input ──────────────────────
-    const blocked = db.prepare(`
+    const blocked = db
+      .prepare(`
       SELECT c.id, c.name, c.description, c.updated_at
       FROM cards c JOIN lists l ON c.list_id = l.id
       WHERE l.name = 'Blocked'
       ORDER BY c.updated_at DESC
-    `).all() as Array<{ id: string; name: string; description: string; updated_at: string }>;
+    `)
+      .all() as Array<{ id: string; name: string; description: string; updated_at: string }>;
 
     for (const card of blocked) {
-      const summary = extractSummary(card.description) || "This task is blocked and needs your input to proceed.";
+      const summary =
+        extractSummary(card.description) || "This task is blocked and needs your input to proceed.";
       const progress = getChecklistProgress(db, card.id);
 
       const blockedNotifId = `blocked-${card.id}`;
@@ -154,6 +218,7 @@ export const notificationsHandlers: GatewayRequestHandlers = {
       // Send push for new blocked cards (first time only)
       if (!pushedNotifications.has(blockedNotifId) && !seenNotifications.has(blockedNotifId)) {
         pushedNotifications.add(blockedNotifId);
+        persistNotificationState(blockedNotifId, "pushed");
         void sendPush("🚧 Card Blocked", card.name, "blocked", card.id);
       }
 
@@ -186,16 +251,19 @@ export const notificationsHandlers: GatewayRequestHandlers = {
     }
 
     // ── In-progress cards — status update ────────────────────
-    const inProgress = db.prepare(`
+    const inProgress = db
+      .prepare(`
       SELECT c.id, c.name, c.description, c.updated_at
       FROM cards c JOIN lists l ON c.list_id = l.id
       WHERE l.name = 'In Progress'
       ORDER BY c.updated_at DESC
-    `).all() as Array<{ id: string; name: string; description: string; updated_at: string }>;
+    `)
+      .all() as Array<{ id: string; name: string; description: string; updated_at: string }>;
 
     for (const card of inProgress) {
       const progress = getChecklistProgress(db, card.id);
-      const pctText = progress.total > 0 ? `${progress.done}/${progress.total} done` : "in progress";
+      const pctText =
+        progress.total > 0 ? `${progress.done}/${progress.total} done` : "in progress";
 
       notifications.push({
         id: `progress-${card.id}`,
@@ -220,12 +288,14 @@ export const notificationsHandlers: GatewayRequestHandlers = {
     }
 
     // ── Recently completed (last 5) — informational ──────────
-    const completed = db.prepare(`
+    const completed = db
+      .prepare(`
       SELECT card_id, card_name, ts
       FROM activity
       WHERE category = 'done'
       ORDER BY ts DESC LIMIT 5
-    `).all() as Array<{ card_id: string; card_name: string; ts: string }>;
+    `)
+      .all() as Array<{ card_id: string; card_name: string; ts: string }>;
 
     for (const entry of completed) {
       if (entry.card_id) {

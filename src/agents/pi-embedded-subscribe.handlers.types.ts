@@ -25,6 +25,8 @@ export type EmbeddedPiSubscribeState = {
   toolMetas: Array<{ toolName?: string; meta?: string }>;
   toolMetaById: Map<string, string | undefined>;
   toolSummaryById: Set<string>;
+  toolStartTimesById: Map<string, number>; // Track tool start times for duration calculation
+  toolArgsById: Map<string, unknown>; // Track tool args for event logging
   lastToolError?: ToolErrorSummary;
 
   blockReplyBreak: "text_end" | "message_end";

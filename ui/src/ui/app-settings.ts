@@ -214,6 +214,10 @@ export async function refreshActiveTab(host: SettingsHost) {
     const app = host as unknown as OpenClawApp;
     await app.loadSwarmHierarchy();
   }
+  if (host.tab === "audit") {
+    const app = host as unknown as OpenClawApp;
+    await app.loadAuditData();
+  }
   if (host.tab === "task-queue") {
     const app = host as unknown as OpenClawApp;
     await app.loadTaskQueue();

@@ -5,8 +5,10 @@ import type { OpenClawConfig } from "../config/config.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { agentCommand } from "../commands/agent.js";
 import { resolveMainSessionKey } from "../config/sessions/main-session.js";
+import { updateSessionStoreEntry } from "../config/sessions/store.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { type RuntimeEnv, defaultRuntime } from "../runtime.js";
+import { loadCombinedSessionStoreForGateway } from "./session-utils.js";
 
 const log = createSubsystemLogger("gateway/boot");
 const BOOT_FILENAME = "BOOT.md";
@@ -47,6 +49,39 @@ async function loadBootFile(
       return { status: "missing" };
     }
     throw err;
+  }
+}
+
+/**
+ * Scan all sessions for runs that were marked "running" when the gateway last shut down.
+ * Mark them as interrupted so the UI and agents can detect the gap.
+ * Returns the count of interrupted sessions.
+ */
+export async function reconcileInterruptedRuns(cfg: OpenClawConfig): Promise<number> {
+  try {
+    const { storePath, store } = loadCombinedSessionStoreForGateway(cfg);
+    let interrupted = 0;
+    for (const [key, entry] of Object.entries(store)) {
+      if (entry?.lastRunStatus === "running" && entry.lastRunId) {
+        log.info(`boot: session "${key}" had run ${entry.lastRunId} interrupted by restart`);
+        await updateSessionStoreEntry({
+          storePath,
+          sessionKey: key,
+          update: async () => ({
+            lastRunStatus: "error" as const,
+            lastRunEndedAt: Date.now(),
+          }),
+        }).catch(() => {});
+        interrupted++;
+      }
+    }
+    if (interrupted > 0) {
+      log.info(`boot: reconciled ${interrupted} interrupted run(s)`);
+    }
+    return interrupted;
+  } catch (err) {
+    log.error(`boot: failed to reconcile interrupted runs: ${err}`);
+    return 0;
   }
 }
 

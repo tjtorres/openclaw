@@ -29,6 +29,17 @@ export type SwarmSnapshot = {
   activeWorkers: number;
 };
 
+export type AgentInstance = {
+  instance_id: string;
+  status: string;
+  assigned_task: string | null;
+  model: string | null;
+  cost: number;
+  spawned_at: string;
+  torn_down_at: string | null;
+  last_active_at: string | null;
+};
+
 export type SwarmAgentNode = {
   id: string;
   name: string;
@@ -40,11 +51,30 @@ export type SwarmAgentNode = {
   children: SwarmAgentNode[];
   specialty?: string | null;
   emoji?: string | null;
+  recentTasks?: Array<{ task: string; status: string; completedAt?: string }>;
+  instances?: AgentInstance[];
+  activeCount?: number;
 };
 
 export type SwarmHierarchy = {
   root: SwarmAgentNode;
   fetchedAt: number;
+};
+
+export type AgentDetail = {
+  id: string;
+  name: string;
+  role: string;
+  level: string;
+  trustScore: number;
+  status: string;
+  currentTask?: string | null;
+  specialty?: string | null;
+  recentHistory: Array<{ task: string; status: string; cost?: number; completedAt?: string }>;
+  assignedCards: Array<{ name: string; progress: number; list: string }>;
+  totalCost: number;
+  tasksCompleted: number;
+  tasksFailed: number;
 };
 
 export type SwarmState = {
@@ -54,6 +84,8 @@ export type SwarmState = {
   swarmSnapshot: SwarmSnapshot | null;
   swarmHierarchy: SwarmHierarchy | null;
   swarmError: string | null;
+  selectedAgent: AgentDetail | null;
+  selectedAgentLoading: boolean;
 };
 
 export async function loadSwarmData(state: SwarmState) {
@@ -74,5 +106,19 @@ export async function loadSwarmData(state: SwarmState) {
     state.swarmError = String(err);
   } finally {
     state.swarmLoading = false;
+  }
+}
+
+export async function loadAgentDetail(state: SwarmState, agentId: string) {
+  if (!state.client || !state.connected) return;
+  state.selectedAgentLoading = true;
+  try {
+    const detail = await state.client.request("swarm.agentDetail", { agentId });
+    state.selectedAgent = detail as AgentDetail;
+  } catch (err) {
+    console.error("[swarm] loadAgentDetail error:", err);
+    state.selectedAgent = null;
+  } finally {
+    state.selectedAgentLoading = false;
   }
 }

@@ -7,14 +7,6 @@ import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
 import type { IssueStatus } from "./controllers/issues.ts";
 import type { IssuesListResult } from "./controllers/issues.ts";
-import type { SprintsListData } from "./views/sprints.ts";
-import {
-  loadSprints as loadSprintsInternal,
-  createSprint as createSprintInternal,
-  completeSprint as completeSprintInternal,
-  cancelSprint as cancelSprintInternal,
-  completeSprintCard as completeSprintCardInternal,
-} from "./controllers/sprints.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
@@ -40,9 +32,10 @@ import type {
   NostrProfile,
 } from "./types.ts";
 import type { ActivityFeedData } from "./views/activity-feed.ts";
-import type { WorkStatusData } from "./views/overview.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
 import type { DayDetailData, MetricsData, ModelDetailData } from "./views/metrics.ts";
+import type { WorkStatusData } from "./views/overview.ts";
+import type { SprintsListData } from "./views/sprints.ts";
 import {
   handleChannelConfigReload as handleChannelConfigReloadInternal,
   handleChannelConfigSave as handleChannelConfigSaveInternal,
@@ -97,6 +90,13 @@ import {
   dismissIssue as dismissIssueInternal,
   reopenIssue as reopenIssueInternal,
 } from "./controllers/issues.ts";
+import {
+  loadSprints as loadSprintsInternal,
+  createSprint as createSprintInternal,
+  completeSprint as completeSprintInternal,
+  cancelSprint as cancelSprintInternal,
+  completeSprintCard as completeSprintCardInternal,
+} from "./controllers/sprints.ts";
 import {
   loadTaskQueue as loadTaskQueueInternal,
   loadCardDetail as loadCardDetailInternal,
@@ -269,6 +269,21 @@ export class OpenClawApp extends LitElement {
   @state() swarmLoading = false;
   @state() swarmHierarchy: any = null;
   @state() swarmError: string | null = null;
+  @state() swarmSnapshot: any = null;
+  @state() selectedAgent: import("./controllers/swarm.ts").AgentDetail | null = null;
+  @state() selectedAgentLoading = false;
+
+  // Audit state
+  @state() auditLoading = false;
+  @state() auditError: string | null = null;
+  @state() auditInstances: import("./views/audit.ts").AuditInstance[] = [];
+  @state() auditEntries: import("./views/audit.ts").AuditEntry[] = [];
+  @state() auditEntriesTotal = 0;
+  @state() auditRawLogs: string | null = null;
+  @state() auditSummary: import("./views/audit.ts").AuditSummary | null = null;
+  @state() auditSelectedInstanceId: string | null = null;
+  @state() auditViewMode: import("./views/audit.ts").AuditViewMode = "actions";
+  @state() auditFilterAgent: string | null = null;
 
   @state() taskQueueLoading = false;
   @state() taskQueueSnapshot: TaskQueueSnapshot | null = null;
@@ -281,7 +296,8 @@ export class OpenClawApp extends LitElement {
   @state() costEstimates: Map<string, import("./task-queue-types.ts").CostEstimate> = new Map();
   @state() costComparisons: Map<string, import("./task-queue-types.ts").CostComparison> = new Map();
   @state() costSummary: import("./task-queue-types.ts").CostSummary | null = null;
-  @state() modelRecommendations: Map<string, import("./task-queue-types.ts").ModelRecommendation> = new Map();
+  @state() modelRecommendations: Map<string, import("./task-queue-types.ts").ModelRecommendation> =
+    new Map();
   @state() activityLoading = false;
   @state() activityData: ActivityFeedData | null = null;
   @state() activityError: string | null = null;
@@ -299,6 +315,7 @@ export class OpenClawApp extends LitElement {
   @state() notificationsLoading = false;
   @state() notificationsError: string | null = null;
   private notificationsPollTimer: number | null = null;
+  private _badgePollTimer: number | null = null;
   @state() metricsLoading = false;
   @state() metricsData: MetricsData | null = null;
   @state() metricsError: string | null = null;
@@ -413,6 +430,15 @@ export class OpenClawApp extends LitElement {
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
     document.addEventListener("keydown", this._handleKeydown);
     window.addEventListener("beforeinstallprompt", this._handleInstallPrompt);
+    // Global badge poll — keeps notification count + permissions fresh across all tabs
+    this._badgePollTimer = window.setInterval(() => {
+      if (this.connected && this.tab !== "notifications") {
+        void this.loadNotifications();
+      }
+      if (this.connected) {
+        void this.loadPermissions();
+      }
+    }, 60_000);
   }
 
   protected firstUpdated() {
@@ -422,6 +448,10 @@ export class OpenClawApp extends LitElement {
   disconnectedCallback() {
     document.removeEventListener("keydown", this._handleKeydown);
     window.removeEventListener("beforeinstallprompt", this._handleInstallPrompt);
+    if (this._badgePollTimer != null) {
+      window.clearInterval(this._badgePollTimer);
+      this._badgePollTimer = null;
+    }
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
@@ -497,7 +527,12 @@ export class OpenClawApp extends LitElement {
     this.swarmLoading = true;
     this.swarmError = null;
     try {
-      this.swarmHierarchy = await this.client.request("swarm.hierarchy", {});
+      const [hierarchy, snapshot] = await Promise.all([
+        this.client.request("swarm.hierarchy", {}),
+        this.client.request("swarm.list", {}).catch(() => null),
+      ]);
+      this.swarmHierarchy = hierarchy;
+      this.swarmSnapshot = snapshot;
     } catch (err: any) {
       this.swarmError = err?.message ?? String(err);
     } finally {
@@ -505,14 +540,76 @@ export class OpenClawApp extends LitElement {
     }
   }
 
+  async loadAgentDetail(agentId: string) {
+    if (!this.client || !this.connected) return;
+    this.selectedAgentLoading = true;
+    try {
+      this.selectedAgent = (await this.client.request("swarm.agentDetail", {
+        agentId,
+      })) as import("./controllers/swarm.ts").AgentDetail;
+    } catch {
+      this.selectedAgent = null;
+    } finally {
+      this.selectedAgentLoading = false;
+    }
+  }
+
+  async loadAuditData() {
+    if (!this.client || !this.connected) return;
+    if (this.auditLoading) return;
+    this.auditLoading = true;
+    this.auditError = null;
+    try {
+      const [instancesRes, entriesRes] = await Promise.all([
+        this.client.request("audit.instances", {
+          agentId: this.auditFilterAgent ?? undefined,
+          limit: 100,
+        }) as Promise<{ instances: import("./views/audit.ts").AuditInstance[]; total: number }>,
+        this.client.request("audit.list", {
+          instanceId: this.auditSelectedInstanceId ?? undefined,
+          agentId: this.auditFilterAgent ?? undefined,
+          limit: 100,
+        }) as Promise<{ entries: import("./views/audit.ts").AuditEntry[]; total: number }>,
+      ]);
+      this.auditInstances = instancesRes.instances;
+      this.auditEntries = entriesRes.entries;
+      this.auditEntriesTotal = entriesRes.total;
+
+      // Load mode-specific data
+      if (this.auditViewMode === "logs") {
+        const logsRes = (await this.client.request("audit.logs", {
+          instanceId: this.auditSelectedInstanceId ?? undefined,
+        })) as { logs: string };
+        this.auditRawLogs = logsRes.logs;
+      } else if (this.auditViewMode === "summary" && this.auditSelectedInstanceId) {
+        const summaryRes = (await this.client.request("audit.summary", {
+          instanceId: this.auditSelectedInstanceId,
+        })) as import("./views/audit.ts").AuditSummary;
+        this.auditSummary = summaryRes;
+      }
+    } catch (err: any) {
+      this.auditError = err?.message ?? String(err);
+    } finally {
+      this.auditLoading = false;
+    }
+  }
+
   async loadTaskQueue() {
     await loadTaskQueueInternal(this as unknown as Parameters<typeof loadTaskQueueInternal>[0]);
     // Load cost estimates for visible cards (non-blocking)
-    loadCostEstimatesInternal(this as unknown as Parameters<typeof loadCostEstimatesInternal>[0]).catch(() => {});
-    loadCostSummaryInternal(this as unknown as Parameters<typeof loadCostSummaryInternal>[0]).catch(() => {});
+    loadCostEstimatesInternal(
+      this as unknown as Parameters<typeof loadCostEstimatesInternal>[0],
+    ).catch(() => {});
+    loadCostSummaryInternal(this as unknown as Parameters<typeof loadCostSummaryInternal>[0]).catch(
+      () => {},
+    );
   }
   async estimateCardCost(cardId: string, description: string) {
-    await estimateCostInternal(this as unknown as Parameters<typeof estimateCostInternal>[0], cardId, description);
+    await estimateCostInternal(
+      this as unknown as Parameters<typeof estimateCostInternal>[0],
+      cardId,
+      description,
+    );
     this.requestUpdate();
   }
   async selectTaskQueueCard(cardId: string) {
@@ -617,13 +714,25 @@ export class OpenClawApp extends LitElement {
   async loadPermissions() {
     if (!this.client || !this.connected) return;
     try {
-      this.permissionsData = await this.client.request<import("./views/overview.ts").PermissionsSummary>("permissions.summary", {});
+      this.permissionsData = await this.client.request<
+        import("./views/overview.ts").PermissionsSummary
+      >("permissions.summary", {});
       // Load audit entries + today's cost (non-blocking)
-      this.client.request<{ entries: import("./views/overview.ts").PermissionsAuditEntry[] }>("permissions.audit", { limit: 10 })
-        .then((r) => { this.permissionsAudit = r.entries; })
+      this.client
+        .request<{ entries: import("./views/overview.ts").PermissionsAuditEntry[] }>(
+          "permissions.audit",
+          { limit: 10 },
+        )
+        .then((r) => {
+          this.permissionsAudit = r.entries;
+        })
         .catch(() => {});
-      this.client.request<{ todayCost: number }>("metrics.overview", {})
-        .then((r: any) => { if (r?.todayCost != null) this.todayCost = r.todayCost; else if (r?.costToday != null) this.todayCost = r.costToday; })
+      this.client
+        .request<{ todayCost: number }>("metrics.overview", {})
+        .then((r: any) => {
+          if (r?.todayCost != null) this.todayCost = r.todayCost;
+          else if (r?.costToday != null) this.todayCost = r.costToday;
+        })
         .catch(() => {});
     } catch {
       // Not available — OK
@@ -633,7 +742,9 @@ export class OpenClawApp extends LitElement {
   async loadSwarmStatus() {
     if (!this.client || !this.connected) return;
     try {
-      this.swarmStatusData = await this.client.request<import("./views/overview.ts").SwarmStatusData>("swarm.status", {});
+      this.swarmStatusData = await this.client.request<
+        import("./views/overview.ts").SwarmStatusData
+      >("swarm.status", {});
     } catch {
       // Not available — OK
     }
@@ -643,7 +754,10 @@ export class OpenClawApp extends LitElement {
     if (!this.client || !this.connected) return;
     this.notificationsLoading = true;
     try {
-      const res = await this.client.request<import("./views/notifications.ts").NotificationsData>("notifications.list", {});
+      const res = await this.client.request<import("./views/notifications.ts").NotificationsData>(
+        "notifications.list",
+        {},
+      );
       this.notificationsData = res;
       this.notificationsError = null;
     } catch (err) {
@@ -674,7 +788,10 @@ export class OpenClawApp extends LitElement {
       const reg = await navigator.serviceWorker.register("/sw.js");
       // Get VAPID public key
       if (!this.client || !this.connected) return;
-      const { publicKey } = await this.client.request<{ publicKey: string }>("push.vapidPublicKey", {});
+      const { publicKey } = await this.client.request<{ publicKey: string }>(
+        "push.vapidPublicKey",
+        {},
+      );
       if (!publicKey) return;
 
       // Check existing subscription
@@ -713,7 +830,18 @@ export class OpenClawApp extends LitElement {
         if (event.data?.type === "notification-action") {
           void this.handleNotificationAction(event.data.rpcMethod, event.data.rpcParams);
         } else if (event.data?.type === "navigate") {
-          this.tab = (event.data.tab || "notifications") as never;
+          const cardId = event.data.cardId;
+          if (cardId) {
+            // Navigate to task queue and select the specific card
+            this.tab = "task-queue" as never;
+            void this.loadTaskQueue().then(() => {
+              if (typeof this.selectTaskQueueCard === "function") {
+                this.selectTaskQueueCard(cardId);
+              }
+            });
+          } else {
+            this.tab = (event.data.tab || "notifications") as never;
+          }
         }
       });
     } catch (err) {
@@ -723,6 +851,17 @@ export class OpenClawApp extends LitElement {
 
   async handleNotificationAction(action: string, params: Record<string, unknown>) {
     if (action === "navigate") {
+      const cardId = params.cardId as string;
+      if (cardId) {
+        // Navigate to task queue and select the specific card
+        this.tab = "task-queue" as never;
+        void this.loadTaskQueue().then(() => {
+          if (typeof this.selectTaskQueueCard === "function") {
+            this.selectTaskQueueCard(cardId);
+          }
+        });
+        return;
+      }
       const tab = params.tab as string;
       if (tab) {
         const { setTab } = await import("./app-settings.ts");
@@ -732,7 +871,9 @@ export class OpenClawApp extends LitElement {
     }
     if (action === "dismiss" && params.notificationId) {
       if (this.client && this.connected) {
-        await this.client.request("notifications.dismiss", { notificationId: params.notificationId });
+        await this.client.request("notifications.dismiss", {
+          notificationId: params.notificationId,
+        });
         void this.loadNotifications();
       }
       return;
@@ -752,7 +893,9 @@ export class OpenClawApp extends LitElement {
         if (params.cardId) {
           // Dismiss all notification IDs for this card
           for (const prefix of ["proposal-", "blocked-"]) {
-            await this.client.request("notifications.dismiss", { notificationId: `${prefix}${params.cardId}` }).catch(() => {});
+            await this.client
+              .request("notifications.dismiss", { notificationId: `${prefix}${params.cardId}` })
+              .catch(() => {});
           }
         }
         // Refresh notifications after action
@@ -777,11 +920,17 @@ export class OpenClawApp extends LitElement {
       const res = await this.client.request<MetricsData>("metrics.overview", params);
       this.metricsData = res;
       // Also load epoch costs + accuracy (non-blocking)
-      this.client.request<import("./views/metrics.ts").EpochCostData>("costs.epochs", {})
-        .then((r) => { this.epochCosts = r; })
+      this.client
+        .request<import("./views/metrics.ts").EpochCostData>("costs.epochs", {})
+        .then((r) => {
+          this.epochCosts = r;
+        })
         .catch(() => {});
-      this.client.request<import("./views/metrics.ts").CostAccuracyData>("costs.summary", {})
-        .then((r) => { this.costAccuracy = r; })
+      this.client
+        .request<import("./views/metrics.ts").CostAccuracyData>("costs.summary", {})
+        .then((r) => {
+          this.costAccuracy = r;
+        })
         .catch(() => {});
     } catch (err) {
       this.metricsError = String(err);
@@ -854,16 +1003,32 @@ export class OpenClawApp extends LitElement {
     await loadSprintsInternal(this as unknown as Parameters<typeof loadSprintsInternal>[0]);
   }
   async createSprint(name: string, goal: string, endDate: string, pullFromBoard = false) {
-    await createSprintInternal(this as unknown as Parameters<typeof createSprintInternal>[0], name, goal, endDate, pullFromBoard);
+    await createSprintInternal(
+      this as unknown as Parameters<typeof createSprintInternal>[0],
+      name,
+      goal,
+      endDate,
+      pullFromBoard,
+    );
   }
   async completeSprint(sprintId: string) {
-    await completeSprintInternal(this as unknown as Parameters<typeof completeSprintInternal>[0], sprintId);
+    await completeSprintInternal(
+      this as unknown as Parameters<typeof completeSprintInternal>[0],
+      sprintId,
+    );
   }
   async cancelSprint(sprintId: string) {
-    await cancelSprintInternal(this as unknown as Parameters<typeof cancelSprintInternal>[0], sprintId);
+    await cancelSprintInternal(
+      this as unknown as Parameters<typeof cancelSprintInternal>[0],
+      sprintId,
+    );
   }
   async completeSprintCard(sprintId: string, cardId: string) {
-    await completeSprintCardInternal(this as unknown as Parameters<typeof completeSprintCardInternal>[0], sprintId, cardId);
+    await completeSprintCardInternal(
+      this as unknown as Parameters<typeof completeSprintCardInternal>[0],
+      sprintId,
+      cardId,
+    );
   }
   toggleSprintCreateForm() {
     this.sprintsShowCreateForm = !this.sprintsShowCreateForm;

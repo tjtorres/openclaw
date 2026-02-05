@@ -143,7 +143,18 @@ export function connectGateway(host: GatewayHost) {
       void loadAssistantIdentity(host as unknown as OpenClawApp);
       void loadAgents(host as unknown as OpenClawApp);
       void loadNodes(host as unknown as OpenClawApp, { quiet: true });
+      // Always setup push notifications on connect (not just overview tab)
+      if (typeof (host as unknown as OpenClawApp).setupPushNotifications === "function") {
+        void (host as unknown as OpenClawApp).setupPushNotifications();
+      }
       void loadDevices(host as unknown as OpenClawApp, { quiet: true });
+      // Load top-bar-critical data on EVERY connect, regardless of active tab.
+      // Permissions → level badge + auto-run toggle; Notifications → bell badge count.
+      {
+        const app = host as unknown as OpenClawApp;
+        if (typeof app.loadPermissions === "function") void app.loadPermissions();
+        if (typeof app.loadNotifications === "function") void app.loadNotifications();
+      }
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
     },
     onClose: ({ code, reason }) => {
@@ -192,7 +203,8 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       const app = host as unknown as OpenClawApp;
       app.agentActivityStatus = "working";
       app.agentActivityLastEvent = Date.now();
-      app.agentActivitySession = (agentPayload as Record<string, unknown>).sessionKey as string ?? null;
+      app.agentActivitySession =
+        ((agentPayload as Record<string, unknown>).sessionKey as string) ?? null;
     }
     return;
   }
