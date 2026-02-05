@@ -234,6 +234,23 @@ export type AgencyCosts = {
     avg_cost: number;
     success_rate: number;
   }>;
+  by_model?: Array<{
+    model: string;
+    runs: number;
+    cost: number;
+  }>;
+  estimation_accuracy?: {
+    avg_accuracy_pct: number | null;
+    sample_count: number;
+    comparisons: Array<{
+      estimated: number;
+      actual: number;
+      complexity: string;
+      ratio: number;
+      accuracy_pct: number;
+      over_under: "over" | "under";
+    }>;
+  } | null;
 };
 
 export type AgencyEvent = {
@@ -721,6 +738,47 @@ const styles = html`
       font-size: 0.8rem;
       color: var(--text-muted, #888);
       margin-top: 4px;
+    }
+
+    /* Model breakdown */
+    .ag-model-breakdown {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .ag-model-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .ag-model-name {
+      min-width: 140px;
+      font-size: 0.9rem;
+      color: var(--text-muted, #888);
+    }
+    .ag-model-bar-container {
+      flex: 1;
+      height: 8px;
+      background: var(--border, #333);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .ag-model-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #238636, #1f6feb);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+    .ag-model-cost {
+      min-width: 70px;
+      text-align: right;
+      font-weight: 600;
+      color: #238636;
+    }
+    .ag-model-runs {
+      min-width: 60px;
+      font-size: 0.8rem;
+      color: var(--text-muted, #666);
     }
 
     /* Cost table */
@@ -2712,40 +2770,143 @@ function renderTabContent(props: AgencyViewProps): ReturnType<typeof html> {
                 <div class="ag-stat-value">$${props.costs.avg_cost_per_run.toFixed(3)}</div>
                 <div class="ag-stat-label">Avg Cost/Run</div>
               </div>
+              ${
+                props.costs.estimation_accuracy?.avg_accuracy_pct != null
+                  ? html`
+                      <div class="ag-stat">
+                        <div
+                          class="ag-stat-value"
+                          style="color: ${
+                            props.costs.estimation_accuracy.avg_accuracy_pct >= 80
+                              ? "#238636"
+                              : props.costs.estimation_accuracy.avg_accuracy_pct >= 60
+                                ? "#d29922"
+                                : "#da3633"
+                          }"
+                        >
+                          ${props.costs.estimation_accuracy.avg_accuracy_pct.toFixed(0)}%
+                        </div>
+                        <div class="ag-stat-label">Est. Accuracy</div>
+                      </div>
+                    `
+                  : nothing
+              }
             </div>
+
+            <!-- Model Breakdown -->
+            ${
+              props.costs.by_model?.length
+                ? html`
+                    <div
+                      class="card"
+                      style="background: var(--panel); padding: 16px; border-radius: 10px; margin-bottom: 16px;"
+                    >
+                      <div style="font-weight: 600; margin-bottom: 12px;">💰 Cost by Model</div>
+                      <div class="ag-model-breakdown">
+                        ${props.costs.by_model.map((m) => {
+                          const pct =
+                            props.costs!.total_cost > 0
+                              ? Math.round((m.cost / props.costs!.total_cost) * 100)
+                              : 0;
+                          return html`
+                            <div class="ag-model-row">
+                              <span class="ag-model-name">${m.model || "unknown"}</span>
+                              <span class="ag-model-bar-container">
+                                <span class="ag-model-bar" style="width: ${pct}%;"></span>
+                              </span>
+                              <span class="ag-model-cost">$${m.cost.toFixed(2)}</span>
+                              <span class="ag-model-runs">(${m.runs} runs)</span>
+                            </div>
+                          `;
+                        })}
+                      </div>
+                    </div>
+                  `
+                : nothing
+            }
+
+            <!-- Agent Breakdown -->
             ${
               props.costs.agents?.length
                 ? html`
-                  <div class="card" style="background: var(--panel); padding: 16px; border-radius: 10px;">
-                    <div style="font-weight: 600; margin-bottom: 12px;">Cost by Agent</div>
-                    <table class="ag-table">
-                      <thead>
-                        <tr>
-                          <th>Agent</th>
-                          <th>Runs</th>
-                          <th>Total Cost</th>
-                          <th>Avg Cost</th>
-                          <th>Success Rate</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        ${props.costs.agents.map(
-                          (a) => html`
-                            <tr>
-                              <td>${a.agent_id}</td>
-                              <td>${a.total_runs}</td>
-                              <td>$${a.total_cost.toFixed(2)}</td>
-                              <td>$${a.avg_cost.toFixed(3)}</td>
-                              <td style="color: ${a.success_rate >= 0.7 ? "#238636" : "#da3633"}">
-                                ${(a.success_rate * 100).toFixed(0)}%
-                              </td>
-                            </tr>
-                          `,
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                `
+                    <div
+                      class="card"
+                      style="background: var(--panel); padding: 16px; border-radius: 10px; margin-bottom: 16px;"
+                    >
+                      <div style="font-weight: 600; margin-bottom: 12px;">🤖 Cost by Agent</div>
+                      <table class="ag-table">
+                        <thead>
+                          <tr>
+                            <th>Agent</th>
+                            <th>Runs</th>
+                            <th>Total Cost</th>
+                            <th>Avg Cost</th>
+                            <th>Success Rate</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${props.costs.agents.map(
+                            (a) => html`
+                              <tr>
+                                <td>${a.agent_id}</td>
+                                <td>${a.total_runs}</td>
+                                <td>$${a.total_cost.toFixed(2)}</td>
+                                <td>$${a.avg_cost.toFixed(3)}</td>
+                                <td style="color: ${a.success_rate >= 0.7 ? "#238636" : "#da3633"}">
+                                  ${(a.success_rate * 100).toFixed(0)}%
+                                </td>
+                              </tr>
+                            `,
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  `
+                : nothing
+            }
+
+            <!-- Estimation Accuracy -->
+            ${
+              props.costs.estimation_accuracy?.comparisons?.length
+                ? html`
+                    <div class="card" style="background: var(--panel); padding: 16px; border-radius: 10px;">
+                      <div style="font-weight: 600; margin-bottom: 12px;">
+                        📊 Estimation Accuracy (last ${props.costs.estimation_accuracy.sample_count} tasks)
+                      </div>
+                      <table class="ag-table">
+                        <thead>
+                          <tr>
+                            <th>Complexity</th>
+                            <th>Estimated</th>
+                            <th>Actual</th>
+                            <th>Accuracy</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${props.costs.estimation_accuracy.comparisons.map(
+                            (c) => html`
+                              <tr>
+                                <td>${c.complexity}</td>
+                                <td>$${c.estimated.toFixed(2)}</td>
+                                <td>$${c.actual.toFixed(2)}</td>
+                                <td
+                                  style="color: ${
+                                    c.accuracy_pct >= 80
+                                      ? "#238636"
+                                      : c.accuracy_pct >= 60
+                                        ? "#d29922"
+                                        : "#da3633"
+                                  }"
+                                >
+                                  ${c.accuracy_pct.toFixed(0)}% ${c.over_under === "over" ? "↑" : "↓"}
+                                </td>
+                              </tr>
+                            `,
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  `
                 : nothing
             }
           `
