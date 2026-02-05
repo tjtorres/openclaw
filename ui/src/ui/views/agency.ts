@@ -700,24 +700,24 @@ const styles = html`
       font-size: 0.75rem;
     }
 
-    /* Stats cards */
-    .ag-stats {
+    /* Stats cards for costs view (grid layout) */
+    .ag-costs-stats {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 16px;
       margin-bottom: 20px;
     }
-    .ag-stat {
+    .ag-costs-stats .ag-stat {
       background: var(--panel, #1a1a2e);
       border-radius: 10px;
       padding: 20px;
       text-align: center;
     }
-    .ag-stat-value {
+    .ag-costs-stats .ag-stat-value {
       font-size: 2rem;
       font-weight: 700;
     }
-    .ag-stat-label {
+    .ag-costs-stats .ag-stat-label {
       font-size: 0.8rem;
       color: var(--text-muted, #888);
       margin-top: 4px;
@@ -2699,7 +2699,7 @@ function renderTabContent(props: AgencyViewProps): ReturnType<typeof html> {
     case "costs":
       return props.costs
         ? html`
-            <div class="ag-stats">
+            <div class="ag-costs-stats">
               <div class="ag-stat">
                 <div class="ag-stat-value">$${props.costs.total_cost.toFixed(2)}</div>
                 <div class="ag-stat-label">Total Spent (7d)</div>
