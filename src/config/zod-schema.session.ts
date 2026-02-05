@@ -64,6 +64,7 @@ export const SessionSchema = z
       .strict()
       .optional(),
     resetByChannel: z.record(z.string(), SessionResetConfigSchema).optional(),
+    preserveAcrossRestarts: z.boolean().optional(),
     store: z.string().optional(),
     typingIntervalSeconds: z.number().int().positive().optional(),
     typingMode: z

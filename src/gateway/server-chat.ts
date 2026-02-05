@@ -37,6 +37,8 @@ export type ChatRunRegistry = {
   shift: (sessionId: string) => ChatRunEntry | undefined;
   remove: (sessionId: string, clientRunId: string, sessionKey?: string) => ChatRunEntry | undefined;
   clear: () => void;
+  /** Iterate over all session IDs and their run entries (for snapshot save) */
+  entries: () => IterableIterator<[string, ChatRunEntry[]]>;
 };
 
 export function createChatRunRegistry(): ChatRunRegistry {
@@ -88,7 +90,9 @@ export function createChatRunRegistry(): ChatRunRegistry {
     chatRunSessions.clear();
   };
 
-  return { add, peek, shift, remove, clear };
+  const entries = () => chatRunSessions.entries();
+
+  return { add, peek, shift, remove, clear, entries };
 }
 
 export type ChatRunState = {

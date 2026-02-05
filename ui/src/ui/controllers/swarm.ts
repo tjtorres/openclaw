@@ -111,6 +111,10 @@ export type SwarmState = {
   drillDownSelectedInstanceId: string | null;
   drillDownLogs: string | null;
   drillDownLogsLoading: boolean;
+  // Comprehensive drill-down data
+  drillDownData: import("../views/agent-drill-down.ts").AgentDrillDownData | null;
+  drillDownDataLoading: boolean;
+  drillDownDataError: string | null;
 };
 
 export async function loadSwarmData(state: SwarmState) {
@@ -188,6 +192,25 @@ export async function loadDrillDownLogs(state: SwarmState, instanceId: string) {
   }
 }
 
+export async function loadDrillDownData(state: SwarmState, agentId: string) {
+  if (!state.client || !state.connected) return;
+  state.drillDownAgentId = agentId;
+  state.drillDownData = null;
+  state.drillDownDataLoading = true;
+  state.drillDownDataError = null;
+
+  try {
+    const data = (await state.client.request("agent.drillDown", {
+      agentId,
+    })) as import("../views/agent-drill-down.ts").AgentDrillDownData;
+    state.drillDownData = data;
+  } catch (err) {
+    state.drillDownDataError = String(err);
+  } finally {
+    state.drillDownDataLoading = false;
+  }
+}
+
 export function closeDrillDown(state: SwarmState) {
   state.drillDownAgentId = null;
   state.drillDownInstances = [];
@@ -196,4 +219,7 @@ export function closeDrillDown(state: SwarmState) {
   state.drillDownSelectedInstanceId = null;
   state.drillDownLogs = null;
   state.drillDownLogsLoading = false;
+  state.drillDownData = null;
+  state.drillDownDataLoading = false;
+  state.drillDownDataError = null;
 }

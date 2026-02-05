@@ -592,6 +592,7 @@ export async function startGatewayServer(
   });
 
   const close = createGatewayCloseHandler({
+    workspaceDir: defaultWorkspaceDir,
     bonjourStop,
     tailscaleCleanup,
     canvasHost,
@@ -614,6 +615,11 @@ export async function startGatewayServer(
     wss,
     httpServer,
     httpServers,
+    activeRunsContext: {
+      chatRunRegistry,
+      agentRunSeq,
+      resolveSessionKeyForRun,
+    },
   });
 
   return {

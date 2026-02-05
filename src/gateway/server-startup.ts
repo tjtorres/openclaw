@@ -136,6 +136,23 @@ export async function startGatewaySidecars(params: {
     params.log.warn(`failed to reconcile interrupted runs: ${String(err)}`);
   }
 
+  // Reconcile active runs snapshot from previous shutdown
+  try {
+    const { reconcileActiveRunsSnapshot } = await import("./active-runs-snapshot.js");
+    const { storePath } = await import("./session-utils.js").then((m) =>
+      m.loadCombinedSessionStoreForGateway(params.cfg),
+    );
+    const result = await reconcileActiveRunsSnapshot({
+      workspaceDir: params.defaultWorkspaceDir,
+      storePath,
+    });
+    if (result.processedCount > 0) {
+      params.log.warn(`processed ${result.processedCount} active run(s) from shutdown snapshot`);
+    }
+  } catch (err) {
+    params.log.warn(`failed to reconcile active runs snapshot: ${String(err)}`);
+  }
+
   if (params.cfg.hooks?.internal?.enabled) {
     setTimeout(() => {
       const hookEvent = createInternalHookEvent("gateway", "startup", "gateway:startup", {

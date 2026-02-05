@@ -2726,6 +2726,7 @@ Controls session scoping, reset policy, reset triggers, and where the session st
     identityLinks: {
       alice: ["telegram:123456789", "discord:987654321012345678"],
     },
+    preserveAcrossRestarts: true,
     reset: {
       mode: "daily",
       atHour: 4,
@@ -2765,6 +2766,7 @@ Fields:
   - `per-account-channel-peer`: isolate DMs per account + channel + sender (recommended for multi-account inboxes).
 - `identityLinks`: map canonical ids to provider-prefixed peers so the same person shares a DM session across channels when using `per-peer`, `per-channel-peer`, or `per-account-channel-peer`.
   - Example: `alice: ["telegram:123456789", "discord:987654321012345678"]`.
+- `preserveAcrossRestarts`: when `true`, sessions persist across gateway restarts regardless of time-based reset policies (default: `false`). Sessions only reset when explicitly triggered (e.g., `/new`). See [Session Persistence](/features/session-persistence) for details.
 - `reset`: primary reset policy. Defaults to daily resets at 4:00 AM local time on the gateway host.
   - `mode`: `daily` or `idle` (default: `daily` when `reset` is present).
   - `atHour`: local hour (0-23) for the daily reset boundary.

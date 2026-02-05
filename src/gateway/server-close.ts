@@ -5,8 +5,10 @@ import type { HeartbeatRunner } from "../infra/heartbeat-runner.js";
 import type { PluginServicesHandle } from "../plugins/services.js";
 import { type ChannelId, listChannelPlugins } from "../channels/plugins/index.js";
 import { stopGmailWatcher } from "../hooks/gmail-watcher.js";
+import { saveActiveRunsSnapshot, type ActiveRunsContext } from "./active-runs-snapshot.js";
 
 export function createGatewayCloseHandler(params: {
+  workspaceDir?: string;
   bonjourStop: (() => Promise<void>) | null;
   tailscaleCleanup: (() => Promise<void>) | null;
   canvasHost: CanvasHostHandler | null;
@@ -29,6 +31,7 @@ export function createGatewayCloseHandler(params: {
   wss: WebSocketServer;
   httpServer: HttpServer;
   httpServers?: HttpServer[];
+  activeRunsContext?: ActiveRunsContext;
 }) {
   return async (opts?: { reason?: string; restartExpectedMs?: number | null }) => {
     const reasonRaw = typeof opts?.reason === "string" ? opts.reason.trim() : "";
@@ -95,6 +98,17 @@ export function createGatewayCloseHandler(params: {
         /* ignore */
       }
     }
+
+    // Save active runs snapshot before clearing state
+    if (params.workspaceDir && params.activeRunsContext) {
+      await saveActiveRunsSnapshot({
+        workspaceDir: params.workspaceDir,
+        context: params.activeRunsContext,
+      }).catch(() => {
+        /* ignore - shutdown should proceed even if snapshot fails */
+      });
+    }
+
     params.chatRunState.clear();
     for (const c of params.clients) {
       try {
