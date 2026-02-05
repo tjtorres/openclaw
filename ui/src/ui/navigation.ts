@@ -1,13 +1,14 @@
 import type { IconName } from "./icons.js";
 
 export const TAB_GROUPS = [
-  { label: "Chat", tabs: ["chat"] },
+  { label: "Dashboard", tabs: ["swarm"] },
+  { label: "Work", tabs: ["notifications", "task-queue", "sprints", "metrics", "issues"] },
   {
     label: "Control",
     tabs: ["overview", "channels", "instances", "sessions", "cron"],
   },
-  { label: "Work", tabs: ["notifications", "task-queue", "sprints", "metrics", "issues"] },
-  { label: "Agent", tabs: ["agents", "swarm", "audit", "skills", "nodes"] },
+  { label: "Agent", tabs: ["agents", "audit", "skills", "nodes"] },
+  { label: "Chat", tabs: ["chat"] },
   { label: "Settings", tabs: ["config", "debug", "logs"] },
 ] as const;
 
@@ -108,7 +109,7 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
     normalized = "/";
   }
   if (normalized === "/") {
-    return "chat";
+    return "swarm";
   }
   return PATH_TO_TAB.get(normalized) ?? null;
 }
