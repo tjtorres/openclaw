@@ -221,6 +221,9 @@ export type KanbanCard = {
   priority?: "low" | "medium" | "high";
   agent_type?: string;
   labels?: string[];
+  // Sprint/Epoch assignment
+  sprint_name?: string;
+  epoch_name?: string;
 };
 
 export type AgencyCosts = {
@@ -978,6 +981,160 @@ const styles = html`
     }
     .ag-cost-value {
       font-weight: 600;
+    }
+
+    /* Enhanced cost detail (v2 - matching OpenClaw task-queue) */
+    .ag-cost-detail-v2 {
+      background: var(--bg-secondary, #161b22);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .ag-cost-main-v2 {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .ag-cost-amount-v2 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text, #fff);
+    }
+    .ag-cost-range-v2 {
+      font-size: 14px;
+      opacity: 0.5;
+    }
+    .ag-cost-meta-v2 {
+      font-size: 13px;
+      opacity: 0.6;
+      margin-bottom: 4px;
+    }
+    .ag-cost-tokens {
+      font-size: 12px;
+      opacity: 0.4;
+    }
+
+    /* Sprint/Epoch labels */
+    .ag-label {
+      display: inline-flex;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .ag-label--sprint {
+      background: #1f6feb;
+      color: white;
+    }
+    .ag-label--epoch {
+      background: #238636;
+      color: white;
+    }
+
+    /* Model recommendation (matching OpenClaw task-queue style) */
+    .ag-model-rec {
+      background: var(--bg-secondary, #161b22);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .ag-model-rec-primary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .ag-model-rec-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .ag-model-rec-name {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .ag-model-rec-score {
+      background: var(--border, #333);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    .ag-model-rankings {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .ag-rank-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .ag-rank-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      font-size: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .ag-rank-model {
+      min-width: 110px;
+      font-size: 13px;
+    }
+    .ag-rank-bar-container {
+      flex: 1;
+      height: 6px;
+      background: var(--border, #333);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .ag-rank-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #6e7681, #8b949e);
+      border-radius: 3px;
+    }
+    .ag-rank-score {
+      min-width: 30px;
+      text-align: right;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .ag-model-rec-note {
+      font-size: 12px;
+      opacity: 0.5;
+      font-style: italic;
+    }
+    .ag-btn-estimate {
+      background: var(--panel, #21262d);
+      border: 1px solid var(--border, #30363d);
+      color: var(--text, #c9d1d9);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .ag-btn-estimate:hover {
+      background: var(--border, #30363d);
+    }
+
+    /* Comment input */
+    .ag-comment-input {
+      margin-top: 8px;
+    }
+    .ag-comment-field {
+      width: 100%;
+      background: var(--bg-secondary, #161b22);
+      border: 1px solid var(--border, #30363d);
+      border-radius: 6px;
+      padding: 12px;
+      color: var(--text, #c9d1d9);
+      font-size: 14px;
+    }
+    .ag-comment-field::placeholder {
+      opacity: 0.5;
     }
 
     /* Metrics grid (matching task-queue.ts) */
@@ -1843,36 +2000,36 @@ function renderDetailPanel(
   events: AgencyEvent[],
   props: AgencyViewProps,
 ): ReturnType<typeof html> {
-  const cost = card.total_cost || card.direct_cost || 0;
-  const confidence = card.cost_confidence ?? 0.7;
-  const confColor = confidenceColor(confidence);
+  // Get cost estimate and model recommendation from props maps
+  const costEstimate = props.costEstimates?.get(card.run_id);
+  const modelRec = props.modelRecommendations?.get(card.run_id);
 
-  // Cost range estimation based on confidence
-  const lowEst = cost * (1 - (1 - confidence) * 0.3);
-  const highEst = cost * (1 + (1 - confidence) * 0.5);
+  const cost = costEstimate?.estimated_cost_usd ?? card.total_cost ?? card.direct_cost ?? 0;
+  const confidence = costEstimate?.confidence ?? "medium";
+  const confLabel = confidence === "high" ? "high" : confidence === "medium" ? "medium" : "low";
+  const confColor =
+    confidence === "high" ? "#238636" : confidence === "medium" ? "#d29922" : "#6e7681";
+
+  // Cost range from estimate or calculate
+  const lowEst = costEstimate?.range?.low ?? cost * 0.5;
+  const highEst = costEstimate?.range?.high ?? cost * 2.0;
+
+  // Token estimates
+  const totalTokens = costEstimate?.estimated_total_tokens ?? card.token_estimate ?? 0;
+  const inputTokens = costEstimate?.estimated_input_tokens ?? Math.round(totalTokens * 0.75);
+  const outputTokens = costEstimate?.estimated_output_tokens ?? Math.round(totalTokens * 0.25);
+  const turns = costEstimate?.estimated_turns ?? 5;
+  const tier = costEstimate?.tier ?? "standard";
 
   // Filter events for this card
   const cardEvents = events.filter((e) => e.run_id === card.run_id).slice(0, 10);
 
-  // Calculate metrics
-  const toolCalls = cardEvents.filter((e) => e.category === "tool").length;
-  const contextPulls = cardEvents.filter((e) => e.category === "context").length;
-  const childCount = card.child_count ?? 0;
-  const completed = childCount - (card.active_children ?? 0);
-
-  // Duration calculation
-  const started = card.started_at ? new Date(card.started_at) : null;
-  const ended = card.ended_at ? new Date(card.ended_at) : null;
-  const durationMs = started && ended ? ended.getTime() - started.getTime() : 0;
-  const durationStr =
-    durationMs > 0
-      ? durationMs < 60000
-        ? `${Math.round(durationMs / 1000)}s`
-        : `${Math.round(durationMs / 60000)}m`
-      : "In progress";
-
   // Status color for badge
   const statusColor = statusColors[card.status] || "#6b7280";
+
+  // Sprint/Epoch labels (if present in metadata)
+  const sprintLabel = card.sprint_name;
+  const epochLabel = card.epoch_name;
 
   return html`
     <div class="ag-overlay" @click=${() => props.onSelectCard(null)}>
@@ -1886,16 +2043,16 @@ function renderDetailPanel(
                 class="ag-list-badge"
                 style="border-color: ${statusColor}; color: ${statusColor};"
               >
-                ${card.status}
+                ${statusIcon(card.status)} ${card.status}
               </span>
               ${
-                card.agent_id
-                  ? html`<span style="opacity:0.6;">Assigned to ${card.agent_id}</span>`
+                sprintLabel
+                  ? html`<span class="ag-label ag-label--sprint">Sprint: ${sprintLabel}</span>`
                   : nothing
               }
               ${
-                started
-                  ? html`<span style="opacity:0.4;">Started ${formatRelativeTime(card.started_at!)}</span>`
+                epochLabel
+                  ? html`<span class="ag-label ag-label--epoch">${epochLabel}</span>`
                   : nothing
               }
             </div>
@@ -1929,78 +2086,94 @@ function renderDetailPanel(
           </select>
         </div>
 
-        <!-- Metrics -->
+        <!-- Description -->
+        ${
+          card.description
+            ? html`
+              <div class="ag-section">
+                <div class="ag-section-title">DESCRIPTION</div>
+                <div class="ag-desc">${card.description}</div>
+              </div>
+            `
+            : nothing
+        }
+
+        <!-- Cost Estimate Section (styled like OpenClaw task-queue) -->
         <div class="ag-section">
-          <div class="ag-section-title">Metrics</div>
-          <div class="ag-metrics-grid">
-            <div class="ag-metric-card">
-              <div class="ag-metric-value">${toolCalls}</div>
-              <div class="ag-metric-label">Tool Calls</div>
+          <div class="ag-section-title">💰 COST ESTIMATE</div>
+          <div class="ag-cost-detail-v2">
+            <div class="ag-cost-main-v2">
+              <span class="ag-cost-amount-v2">~$${cost.toFixed(2)}</span>
+              <span class="ag-cost-range-v2">($${lowEst.toFixed(2)} – $${highEst.toFixed(2)})</span>
             </div>
-            <div class="ag-metric-card">
-              <div class="ag-metric-value">${contextPulls}</div>
-              <div class="ag-metric-label">Context Pulls</div>
+            <div class="ag-cost-meta-v2">
+              <span style="color: ${confColor};">●</span>
+              ${confLabel} confidence · ${costEstimate?.complexity ?? "moderate"} · ~${turns} turns · ${tier}
             </div>
-            <div class="ag-metric-card">
-              <div class="ag-metric-value">${completed}/${childCount || 0}</div>
-              <div class="ag-metric-label">Sub-tasks</div>
-            </div>
-            <div class="ag-metric-card">
-              <div class="ag-metric-value">${durationStr}</div>
-              <div class="ag-metric-label">Duration</div>
+            <div class="ag-cost-tokens">
+              ~${(totalTokens / 1000).toFixed(1)}K tokens (${(inputTokens / 1000).toFixed(1)}K in / ${(outputTokens / 1000).toFixed(1)}K out)
             </div>
           </div>
         </div>
 
-        <!-- Cost Estimate -->
-        <div class="ag-section">
-          <div class="ag-section-title">Cost Estimate</div>
-          <div class="ag-cost-detail">
-            <div class="ag-cost-main">
-              <span class="ag-cost-amount" style="color: ${confColor};">$${cost.toFixed(2)}</span>
-              <span class="ag-cost-range">
-                ($${lowEst.toFixed(2)} - $${highEst.toFixed(2)})
-              </span>
-            </div>
-            <div class="ag-cost-meta">
-              <span>
-                <span style="color: ${confColor};">●</span>
-                ${Math.round(confidence * 100)}% confidence
-              </span>
-              ${card.model ? html`<span>📊 ${card.model}</span>` : nothing}
-              ${
-                card.token_estimate
-                  ? html`<span>🔤 ~${card.token_estimate.toLocaleString()} tokens</span>`
-                  : nothing
-              }
-            </div>
-            ${
-              card.model_recommendations?.length
-                ? html`
-                  <div class="ag-model-breakdown">
-                    <div style="font-size: 11px; opacity: 0.5; margin-bottom: 6px;">
-                      Alternative Models
-                    </div>
-                    ${card.model_recommendations.slice(0, 3).map(
-                      (rec) => html`
-                        <div class="ag-model-row">
-                          <span class="ag-model-name">${rec.model}</span>
-                          <div class="ag-model-bar-container">
-                            <div
-                              class="ag-model-bar"
-                              style="width: ${Math.min(100, (rec.cost / cost) * 100)}%;"
-                            ></div>
-                          </div>
-                          <span class="ag-model-cost">$${rec.cost.toFixed(2)}</span>
-                        </div>
-                      `,
-                    )}
+        <!-- Model Recommendation Section (styled like OpenClaw) -->
+        ${
+          modelRec
+            ? html`
+              <div class="ag-section">
+                <div class="ag-section-title" style="display: flex; justify-content: space-between;">
+                  <span>🤖 Recommended Model</span>
+                  <span style="opacity: 0.5; font-weight: normal;">
+                    ${modelRec.task_type ?? "coding"} · ${modelRec.complexity ?? "simple"}
+                  </span>
+                </div>
+                <div class="ag-model-rec">
+                  <div class="ag-model-rec-primary">
+                    <span class="ag-model-rec-dot" style="background: #238636;"></span>
+                    <span class="ag-model-rec-name">${modelRec.recommended}</span>
+                    <span class="ag-model-rec-score">${Math.round((modelRec.recommended_score ?? 0.85) * 100)}pts</span>
                   </div>
-                `
-                : nothing
-            }
-          </div>
-        </div>
+                  ${
+                    modelRec.rankings?.length
+                      ? html`
+                        <div class="ag-model-rankings">
+                          ${modelRec.rankings.slice(0, 4).map((r, i) => {
+                            const score = Math.round((r.score ?? 0.8) * 100);
+                            const dotColor = i === 0 ? "#238636" : i === 1 ? "#f0c000" : "#58a6ff";
+                            const icon = r.model.includes("gemini") ? "⚡" : "";
+                            return html`
+                              <div class="ag-rank-row">
+                                <span class="ag-rank-dot" style="background: ${dotColor};">${icon}</span>
+                                <span class="ag-rank-model">${r.model}</span>
+                                <span class="ag-rank-bar-container">
+                                  <span class="ag-rank-bar" style="width: ${score}%;"></span>
+                                </span>
+                                <span class="ag-rank-score">${score}</span>
+                              </div>
+                            `;
+                          })}
+                        </div>
+                        <div class="ag-model-rec-note">
+                          ${modelRec.recommended} scores highest (${((modelRec.recommended_score ?? 0.85) * 100).toFixed(1)}); balanced for ${modelRec.task_type ?? "coding"}
+                        </div>
+                      `
+                      : nothing
+                  }
+                </div>
+              </div>
+            `
+            : html`
+              <div class="ag-section">
+                <div class="ag-section-title">🤖 Recommended Model</div>
+                <button
+                  class="ag-btn-estimate"
+                  @click=${() => props.onRecommendModel?.(card.run_id, card.goal ?? "", "balance")}
+                >
+                  Get Recommendation
+                </button>
+              </div>
+            `
+        }
 
         <!-- Activity Log -->
         ${
@@ -2025,20 +2198,30 @@ function renderDetailPanel(
             : nothing
         }
 
-        <!-- Description / Notes -->
-        ${
-          card.description
-            ? html`
-              <div class="ag-section">
-                <div class="ag-section-title">Description</div>
-                <div class="ag-desc">${card.description}</div>
-              </div>
-            `
-            : nothing
-        }
+        <!-- Comment Section -->
+        <div class="ag-section">
+          <div class="ag-comment-input">
+            <input type="text" placeholder="Add a comment..." class="ag-comment-field" />
+          </div>
+        </div>
       </div>
     </div>
   `;
+}
+
+function statusIcon(status: string): string {
+  switch (status) {
+    case "pending":
+      return "💡";
+    case "running":
+      return "⚡";
+    case "completed":
+      return "✅";
+    case "failed":
+      return "❌";
+    default:
+      return "📋";
+  }
 }
 
 function renderKanbanColumn(
