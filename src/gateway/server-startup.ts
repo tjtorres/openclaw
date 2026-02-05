@@ -128,6 +128,14 @@ export async function startGatewaySidecars(params: {
     );
   }
 
+  // Reconcile interrupted runs on every gateway startup (independent of hooks)
+  try {
+    const { reconcileInterruptedRuns } = await import("./boot.js");
+    await reconcileInterruptedRuns(params.cfg);
+  } catch (err) {
+    params.log.warn(`failed to reconcile interrupted runs: ${String(err)}`);
+  }
+
   if (params.cfg.hooks?.internal?.enabled) {
     setTimeout(() => {
       const hookEvent = createInternalHookEvent("gateway", "startup", "gateway:startup", {
