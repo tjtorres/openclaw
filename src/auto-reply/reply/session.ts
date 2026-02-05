@@ -218,8 +218,12 @@ export async function initSessionState(params: {
     resetType,
     resetOverride: channelReset,
   });
+  // When preserveAcrossRestarts is enabled, treat existing sessions as fresh
+  // regardless of time-based policies (unless explicitly reset via triggers).
+  const preserveAcrossRestarts = sessionCfg?.preserveAcrossRestarts ?? false;
   const freshEntry = entry
-    ? evaluateSessionFreshness({ updatedAt: entry.updatedAt, now, policy: resetPolicy }).fresh
+    ? preserveAcrossRestarts ||
+      evaluateSessionFreshness({ updatedAt: entry.updatedAt, now, policy: resetPolicy }).fresh
     : false;
 
   if (!isNewSession && freshEntry) {

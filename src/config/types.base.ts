@@ -88,6 +88,12 @@ export type SessionConfig = {
   resetByType?: SessionResetByTypeConfig;
   /** Channel-specific reset overrides (e.g. { discord: { mode: "idle", idleMinutes: 10080 } }). */
   resetByChannel?: Record<string, SessionResetConfig>;
+  /**
+   * Preserve sessions across gateway restarts regardless of time-based policies.
+   * When true, sessions persist until explicitly cleared via reset triggers.
+   * Default: false (apply time-based reset policies).
+   */
+  preserveAcrossRestarts?: boolean;
   store?: string;
   typingIntervalSeconds?: number;
   typingMode?: TypingMode;
