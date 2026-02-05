@@ -283,6 +283,24 @@ export class OpenClawApp extends LitElement {
   @state() drillDownDataLoading = false;
   @state() drillDownDataError: string | null = null;
 
+  // Agency state
+  @state() agencyLoading = false;
+  @state() agencyError: string | null = null;
+  @state() agencyHierarchy: import("./views/agency.ts").AgencyHierarchy | null = null;
+  @state() agencyKanban: import("./views/agency.ts").AgencyKanban | null = null;
+  @state() agencySprints: import("./views/agency.ts").AgencySprintsData | null = null;
+  @state() agencyCosts: import("./views/agency.ts").AgencyCosts | null = null;
+  @state() agencyEvents: import("./views/agency.ts").AgencyEvent[] = [];
+  @state() agencyAuditEntries: import("./views/agency.ts").AuditEntry[] = [];
+  @state() agencyAuditInstances: import("./views/agency.ts").AuditInstance[] = [];
+  @state() agencyAuditViolations: import("./views/agency.ts").AuditViolation[] = [];
+  @state() agencyAuditSelectedInstance: string | null = null;
+  @state() agencyTab: import("./views/agency.ts").AgencyTabId = "hierarchy";
+  @state() agencySelectedCard: string | null = null;
+  @state() agencyShowSprintForm = false;
+  @state() agencyCostEstimates = new Map<string, import("./views/agency.ts").CostEstimate>();
+  @state() agencyModelRecs = new Map<string, import("./views/agency.ts").ModelRecommendation>();
+
   // Audit state
   @state() auditLoading = false;
   @state() auditError: string | null = null;
@@ -547,6 +565,138 @@ export class OpenClawApp extends LitElement {
       this.swarmError = err?.message ?? String(err);
     } finally {
       this.swarmLoading = false;
+    }
+  }
+
+  // Agency data loading (fetches from Agency API server)
+  private static readonly AGENCY_API_URL = "https://srv1318413.tailba1595.ts.net:8765";
+
+  async loadAgencyData() {
+    this.agencyLoading = true;
+    this.agencyError = null;
+    try {
+      const apiUrl = OpenClawApp.AGENCY_API_URL;
+      const [
+        hierarchy,
+        kanban,
+        sprints,
+        costs,
+        events,
+        auditEntries,
+        auditInstances,
+        auditViolations,
+      ] = await Promise.all([
+        fetch(`${apiUrl}/api/swarm/hierarchy`).then((r) => r.json()),
+        fetch(`${apiUrl}/api/goals/kanban`).then((r) => r.json()),
+        fetch(`${apiUrl}/api/sprints`).then((r) => r.json()),
+        fetch(`${apiUrl}/api/costs/summary?days=7`).then((r) => r.json()),
+        fetch(`${apiUrl}/api/events/stream?limit=50`).then((r) => r.json()),
+        fetch(`${apiUrl}/api/audit/entries?limit=100`).then((r) => r.json()),
+        fetch(`${apiUrl}/api/audit/instances`).then((r) => r.json()),
+        fetch(`${apiUrl}/api/audit/violations?limit=50`).then((r) => r.json()),
+      ]);
+      this.agencyHierarchy = hierarchy;
+      this.agencyKanban = kanban;
+      this.agencySprints = sprints;
+      this.agencyCosts = costs;
+      this.agencyEvents = events;
+      this.agencyAuditEntries = auditEntries;
+      this.agencyAuditInstances = auditInstances;
+      this.agencyAuditViolations = auditViolations;
+    } catch (err: any) {
+      this.agencyError = `Failed to connect to Agency API: ${err?.message ?? String(err)}`;
+    } finally {
+      this.agencyLoading = false;
+    }
+  }
+
+  // Agency Sprint actions
+  async createAgencySprint(name: string, goal: string, endDate: string, pullFromBoard: boolean) {
+    const apiUrl = OpenClawApp.AGENCY_API_URL;
+    try {
+      await fetch(`${apiUrl}/api/sprints/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, goal, endDate, pullFromBoard }),
+      });
+      this.agencyShowSprintForm = false;
+      this.loadAgencyData();
+    } catch (err) {
+      console.error("[Agency] Failed to create sprint:", err);
+    }
+  }
+
+  async completeAgencySprint(sprintId: string) {
+    const apiUrl = OpenClawApp.AGENCY_API_URL;
+    try {
+      await fetch(`${apiUrl}/api/sprints/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sprintId }),
+      });
+      this.loadAgencyData();
+    } catch (err) {
+      console.error("[Agency] Failed to complete sprint:", err);
+    }
+  }
+
+  async cancelAgencySprint(sprintId: string) {
+    const apiUrl = OpenClawApp.AGENCY_API_URL;
+    try {
+      await fetch(`${apiUrl}/api/sprints/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sprintId }),
+      });
+      this.loadAgencyData();
+    } catch (err) {
+      console.error("[Agency] Failed to cancel sprint:", err);
+    }
+  }
+
+  async completeAgencySprintCard(sprintId: string, cardId: string) {
+    const apiUrl = OpenClawApp.AGENCY_API_URL;
+    try {
+      await fetch(`${apiUrl}/api/sprints/complete-card`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sprintId, runId: cardId }),
+      });
+      this.loadAgencyData();
+    } catch (err) {
+      console.error("[Agency] Failed to complete card:", err);
+    }
+  }
+
+  async estimateAgencyCost(runId: string, description: string) {
+    const apiUrl = OpenClawApp.AGENCY_API_URL;
+    try {
+      const response = await fetch(`${apiUrl}/api/cost/estimate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId, description }),
+      });
+      const estimate = await response.json();
+      this.agencyCostEstimates = new Map(this.agencyCostEstimates).set(runId, estimate);
+      this.requestUpdate();
+    } catch (err) {
+      console.error("[Agency] Failed to estimate cost:", err);
+    }
+  }
+
+  async recommendAgencyModel(runId: string, description: string, optimize: string) {
+    const apiUrl = OpenClawApp.AGENCY_API_URL;
+    try {
+      const response = await fetch(`${apiUrl}/api/model/recommend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId, description, optimize }),
+      });
+      const rec = await response.json();
+      this.agencyModelRecs = new Map(this.agencyModelRecs).set(runId, rec);
+      this.requestUpdate();
+    } catch (err) {
+      console.error("[Agency] Failed to get model recommendation:", err);
     }
   }
 

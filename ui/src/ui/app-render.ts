@@ -54,6 +54,7 @@ import {
 import { icons } from "./icons.ts";
 import { TAB_GROUPS, subtitleForTab, titleForTab } from "./navigation.ts";
 import { ConfigUiHints } from "./types.ts";
+import { renderAgencyView, loadAgencyData, type AgencyState } from "./views/agency.ts";
 import { renderAgents } from "./views/agents.ts";
 import { renderAudit } from "./views/audit.ts";
 import { renderChannels } from "./views/channels.ts";
@@ -458,6 +459,97 @@ export function renderApp(state: AppViewState) {
                 onCloseDrillDown: () => state.closeDrillDown(),
                 onSelectInstance: (id: string) => state.selectDrillDownInstance(id),
                 onRefreshDrillDown: () => state.refreshDrillDown(),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "agency"
+            ? renderAgencyView({
+                loading: state.agencyLoading ?? false,
+                error: state.agencyError ?? null,
+                hierarchy: state.agencyHierarchy ?? null,
+                kanban: state.agencyKanban ?? null,
+                sprints: state.agencySprints ?? null,
+                costs: state.agencyCosts ?? null,
+                events: state.agencyEvents ?? [],
+                auditEntries: state.agencyAuditEntries ?? [],
+                auditInstances: state.agencyAuditInstances ?? [],
+                auditViolations: state.agencyAuditViolations ?? [],
+                auditSelectedInstanceId: state.agencyAuditSelectedInstance ?? null,
+                activeTab: state.agencyTab ?? "hierarchy",
+                selectedCardId: state.agencySelectedCard ?? null,
+                showSprintForm: state.agencyShowSprintForm ?? false,
+                costEstimates: state.agencyCostEstimates ?? new Map(),
+                modelRecommendations: state.agencyModelRecs ?? new Map(),
+                onTabChange: (tab) => {
+                  state.agencyTab = tab;
+                  state.requestUpdate();
+                },
+                onRefresh: () => state.loadAgencyData(),
+                onSelectCard: (runId: string | null) => {
+                  state.agencySelectedCard = runId;
+                  state.requestUpdate();
+                },
+                onCloseCard: () => {
+                  state.agencySelectedCard = null;
+                  state.requestUpdate();
+                },
+                onApproveTask: async (runId: string) => {
+                  const apiUrl = "https://srv1318413.tailba1595.ts.net:8765";
+                  await fetch(`${apiUrl}/api/tasks/approve`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ runId }),
+                  });
+                  state.loadAgencyData();
+                },
+                onRejectTask: async (runId: string) => {
+                  const apiUrl = "https://srv1318413.tailba1595.ts.net:8765";
+                  await fetch(`${apiUrl}/api/tasks/reject`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ runId }),
+                  });
+                  state.loadAgencyData();
+                },
+                onMoveTask: async (runId: string, status: string) => {
+                  const apiUrl = "https://srv1318413.tailba1595.ts.net:8765";
+                  await fetch(`${apiUrl}/api/tasks/move`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ runId, status }),
+                  });
+                  state.loadAgencyData();
+                },
+                onSelectAuditInstance: (instanceId: string | null) => {
+                  state.agencyAuditSelectedInstance = instanceId;
+                  state.requestUpdate();
+                },
+                // Sprint actions
+                onToggleSprintForm: () => {
+                  state.agencyShowSprintForm = !state.agencyShowSprintForm;
+                  state.requestUpdate();
+                },
+                onCreateSprint: (name, goal, endDate, pullFromBoard) => {
+                  state.createAgencySprint(name, goal, endDate, pullFromBoard);
+                },
+                onCompleteSprint: (sprintId) => {
+                  state.completeAgencySprint(sprintId);
+                },
+                onCancelSprint: (sprintId) => {
+                  state.cancelAgencySprint(sprintId);
+                },
+                onCompleteSprintCard: (sprintId, cardId) => {
+                  state.completeAgencySprintCard(sprintId, cardId);
+                },
+                // Cost estimation
+                onEstimateCost: (runId, description) => {
+                  state.estimateAgencyCost(runId, description);
+                },
+                onRecommendModel: (runId, description, optimize) => {
+                  state.recommendAgencyModel(runId, description, optimize);
+                },
               })
             : nothing
         }

@@ -1,0 +1,15 @@
+{
+  "agency_api_url": "https://srv1318413.tailba1595.ts.net:8765",
+  "installed_at": "2026-02-05T12:36:24.229159",
+  "version": "0.2.0",
+  "files": [
+    "/home/teej/Projects/openclaw/ui/src/ui/views/agency-swarm.ts",
+    "/home/teej/Projects/openclaw/ui/src/ui/views/agency-goals.ts",
+    "/home/teej/Projects/openclaw/ui/src/ui/views/agency-costs.ts",
+    "/home/teej/Projects/openclaw/ui/src/ui/views/agency-timeline.ts",
+    "/home/teej/Projects/openclaw/ui/src/ui/views/agency-metrics.ts",
+    "/home/teej/Projects/openclaw/ui/src/ui/views/agency-events.ts",
+    "/home/teej/Projects/openclaw/ui/src/ui/controllers/agency-bridge.ts",
+    "/home/teej/Projects/openclaw/ui/src/ui/controllers/swarm.ts"
+  ]
+}

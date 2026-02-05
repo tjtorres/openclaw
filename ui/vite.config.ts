@@ -36,6 +36,11 @@ export default defineConfig(() => {
       host: true,
       port: 5173,
       strictPort: true,
+      allowedHosts: [
+        "localhost",
+        "srv1318413.tailba1595.ts.net",
+        ".ts.net", // Allow all Tailscale hosts
+      ],
     },
   };
 });

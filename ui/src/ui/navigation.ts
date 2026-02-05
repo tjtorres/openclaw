@@ -1,7 +1,7 @@
 import type { IconName } from "./icons.js";
 
 export const TAB_GROUPS = [
-  { label: "Dashboard", tabs: ["swarm"] },
+  { label: "Dashboard", tabs: ["swarm", "agency"] },
   { label: "Work", tabs: ["notifications", "task-queue", "sprints", "metrics", "issues"] },
   {
     label: "Control",
@@ -15,6 +15,7 @@ export const TAB_GROUPS = [
 export type Tab =
   | "agents"
   | "swarm"
+  | "agency"
   | "audit"
   | "overview"
   | "channels"
@@ -36,6 +37,7 @@ export type Tab =
 const TAB_PATHS: Record<Tab, string> = {
   agents: "/agents",
   swarm: "/swarm",
+  agency: "/agency",
   audit: "/audit",
   overview: "/overview",
   channels: "/channels",
@@ -142,6 +144,8 @@ export function iconForTab(tab: Tab): IconName {
       return "folder";
     case "swarm":
       return "radio";
+    case "agency":
+      return "layers";
     case "audit":
       return "scrollText";
     case "chat":
@@ -187,6 +191,8 @@ export function titleForTab(tab: Tab) {
       return "Agents";
     case "swarm":
       return "Swarm";
+    case "agency":
+      return "Agency";
     case "audit":
       return "Audit";
     case "overview":
@@ -232,6 +238,8 @@ export function subtitleForTab(tab: Tab) {
       return "Manage agent workspaces, tools, and identities.";
     case "swarm":
       return "Agent hierarchy, trust scores, and live worker status.";
+    case "agency":
+      return "Agency swarm dashboard with hierarchy, kanban, costs, and events.";
     case "audit":
       return "Agent instance history, raw logs, and task summaries.";
     case "overview":
