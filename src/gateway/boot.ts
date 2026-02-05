@@ -90,6 +90,9 @@ export async function runBootOnce(params: {
   deps: CliDeps;
   workspaceDir: string;
 }): Promise<BootRunResult> {
+  // Reconcile interrupted runs before boot check (mark any "running" sessions as interrupted)
+  await reconcileInterruptedRuns(params.cfg);
+
   const bootRuntime: RuntimeEnv = {
     log: () => {},
     error: (message) => log.error(String(message)),
