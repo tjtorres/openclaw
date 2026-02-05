@@ -1892,3 +1892,216 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Agent Drill-Down Panel */
+.drill-down-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.drill-down-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.drill-down-stat-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text, #e2e8f0);
+}
+
+.stat-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.drill-down-current-work {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.work-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.work-item .label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.drill-down-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drill-down-task-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-hover, #242442);
+  border: 1px solid var(--border, #2d2d4a);
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.drill-down-task-row:hover {
+  background: var(--border, #2d2d4a);
+}
+
+.task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.task-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text, #e2e8f0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.task-cost {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f59e0b;
+  white-space: nowrap;
+}
+
+.drill-down-instances-table {
+  overflow-x: auto;
+}
+
+.drill-down-audit-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.audit-entry {
+  display: flex;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-hover, #242442);
+  border: 1px solid var(--border, #2d2d4a);
+  border-radius: 6px;
+}
+
+.audit-ts {
+  font-size: 0.72rem;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.audit-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.audit-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.audit-detail {
+  font-size: 0.8rem;
+}
+
+.audit-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+/* Light mode overrides */
+[data-theme="light"] .drill-down-task-row,
+[data-theme="light"] .audit-entry {
+  background: #f9fafb;
+}
+
+[data-theme="light"] .drill-down-task-row:hover {
+  background: #f3f4f6;
+}
+
+[data-theme="light"] .drill-down-stat-card {
+  background: #ffffff;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .drill-down-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stat-value {
+    font-size: 1.2rem;
+  }
+
+  .drill-down-task-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .task-cost {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .drill-down-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-entry {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .audit-ts {
+    min-width: auto;
+  }
+}

@@ -451,9 +451,13 @@ export function renderApp(state: AppViewState) {
                 drillDownSelectedInstanceId: state.drillDownSelectedInstanceId,
                 drillDownLogs: state.drillDownLogs,
                 drillDownLogsLoading: state.drillDownLogsLoading,
+                drillDownData: state.drillDownData,
+                drillDownDataLoading: state.drillDownDataLoading,
+                drillDownDataError: state.drillDownDataError,
                 onOpenDrillDown: (id: string) => state.openDrillDown(id),
                 onCloseDrillDown: () => state.closeDrillDown(),
                 onSelectInstance: (id: string) => state.selectDrillDownInstance(id),
+                onRefreshDrillDown: () => state.refreshDrillDown(),
               })
             : nothing
         }

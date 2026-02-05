@@ -279,6 +279,9 @@ export class OpenClawApp extends LitElement {
   @state() drillDownSelectedInstanceId: string | null = null;
   @state() drillDownLogs: string | null = null;
   @state() drillDownLogsLoading = false;
+  @state() drillDownData: import("./views/agent-drill-down.ts").AgentDrillDownData | null = null;
+  @state() drillDownDataLoading = false;
+  @state() drillDownDataError: string | null = null;
 
   // Audit state
   @state() auditLoading = false;
@@ -564,20 +567,48 @@ export class OpenClawApp extends LitElement {
   async openDrillDown(agentId: string) {
     if (!this.client || !this.connected) return;
     this.drillDownAgentId = agentId;
+    this.drillDownData = null;
+    this.drillDownDataLoading = true;
+    this.drillDownDataError = null;
+
+    // Legacy drill-down state (for backward compatibility)
     this.drillDownInstances = [];
     this.drillDownInstancesLoading = true;
     this.drillDownInstancesError = null;
     this.drillDownSelectedInstanceId = null;
     this.drillDownLogs = null;
+
     try {
-      const res = (await this.client.request("audit.instances", {
+      // Fetch comprehensive drill-down data
+      const data = (await this.client.request("agent.drillDown", {
         agentId,
-        limit: 50,
-      })) as { instances: import("./controllers/swarm.ts").DrillDownInstance[]; total: number };
-      this.drillDownInstances = res.instances;
+      })) as import("./views/agent-drill-down.ts").AgentDrillDownData;
+      this.drillDownData = data;
+
+      // Also populate legacy drill-down instances for backward compatibility
+      this.drillDownInstances = data.instances.map((i) => ({
+        instanceId: i.instanceId,
+        agentId: data.agentId,
+        instanceNum: i.instanceNum,
+        status: i.status,
+        assignedTask: i.task,
+        taskSummary: i.summary,
+        model: i.model,
+        cost: i.cost,
+        spawnedAt: i.spawnedAt,
+        lastActiveAt: i.lastActiveAt || "",
+        tornDownAt: i.tornDownAt,
+        sessionKey: null,
+        jobId: null,
+        actionCount: 0,
+      }));
+
+      this.drillDownInstancesError = null;
     } catch (err) {
+      this.drillDownDataError = String(err);
       this.drillDownInstancesError = String(err);
     } finally {
+      this.drillDownDataLoading = false;
       this.drillDownInstancesLoading = false;
     }
   }
@@ -607,6 +638,15 @@ export class OpenClawApp extends LitElement {
     this.drillDownSelectedInstanceId = null;
     this.drillDownLogs = null;
     this.drillDownLogsLoading = false;
+    this.drillDownData = null;
+    this.drillDownDataLoading = false;
+    this.drillDownDataError = null;
+  }
+
+  async refreshDrillDown() {
+    if (this.drillDownAgentId) {
+      await this.openDrillDown(this.drillDownAgentId);
+    }
   }
 
   async loadAuditData() {

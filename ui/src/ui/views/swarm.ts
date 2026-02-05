@@ -5,8 +5,10 @@ import type {
   SwarmAgentNode,
   SwarmGroup,
   AgentInstance,
+  DrillDownInstance,
 } from "../controllers/swarm";
 import { formatAgo } from "../format";
+import { renderAgentDrillDown } from "./agent-drill-down.ts";
 
 export type AgentDetail = {
   id: string;
@@ -34,6 +36,21 @@ export type SwarmViewProps = {
   onRefresh: () => void;
   onSelectAgent: (agentId: string) => void;
   onCloseAgent: () => void;
+  // Drill-down panel
+  drillDownAgentId: string | null;
+  drillDownInstances: DrillDownInstance[];
+  drillDownInstancesLoading: boolean;
+  drillDownInstancesError: string | null;
+  drillDownSelectedInstanceId: string | null;
+  drillDownLogs: string | null;
+  drillDownLogsLoading: boolean;
+  drillDownData: import("./agent-drill-down.ts").AgentDrillDownData | null;
+  drillDownDataLoading: boolean;
+  drillDownDataError: string | null;
+  onOpenDrillDown: (agentId: string) => void;
+  onCloseDrillDown: () => void;
+  onSelectInstance: (instanceId: string) => void;
+  onRefreshDrillDown: () => void;
 };
 
 // Health tier types for agent status
@@ -745,6 +762,227 @@ function renderHealthLegend() {
   `;
 }
 
+function drillDownInstanceStatus(status: string): { color: string; label: string } {
+  if (status === "running") return { color: "#10b981", label: "Running" };
+  if (status === "failed" || status === "error") return { color: "#ef4444", label: "Failed" };
+  if (status === "done" || status === "torn_down") return { color: "#6b7280", label: "Done" };
+  return { color: "#94a3b8", label: status };
+}
+
+function renderDrillDownPanel(props: SwarmViewProps) {
+  if (!props.drillDownAgentId) return nothing;
+
+  const agentName = props.selectedAgent?.name ?? props.drillDownAgentId;
+
+  // Use comprehensive drill-down panel if data is available
+  if (props.drillDownData || props.drillDownDataLoading || props.drillDownDataError) {
+    return html`
+      <div style="position: relative; margin-top: 16px;">
+        <button
+          style="
+            position: absolute; top: 12px; right: 12px;
+            background: var(--bg-hover, #242442);
+            border: 1px solid var(--border, #2d2d4a);
+            color: var(--text, #e2e8f0);
+            cursor: pointer; font-size: 1.2rem;
+            padding: 4px 10px; border-radius: 6px;
+            transition: all 0.2s;
+            z-index: 10;
+          "
+          @click=${props.onCloseDrillDown}
+          @mouseenter=${(e: any) => {
+            e.target.style.background = "var(--border, #2d2d4a)";
+          }}
+          @mouseleave=${(e: any) => {
+            e.target.style.background = "var(--bg-hover, #242442)";
+          }}
+        >✕</button>
+        
+        ${renderAgentDrillDown({
+          agentId: props.drillDownAgentId,
+          data: props.drillDownData,
+          loading: props.drillDownDataLoading,
+          error: props.drillDownDataError,
+          onRefresh: props.onRefreshDrillDown,
+        })}
+      </div>
+    `;
+  }
+
+  // Fallback to legacy drill-down panel (instances + logs)
+  return html`
+    <div class="card drill-down-panel" style="
+      margin-top: 16px;
+      border: 2px solid var(--border-strong, #3d3d5a);
+      position: relative;
+    ">
+      <button
+        style="
+          position: absolute; top: 12px; right: 12px;
+          background: var(--bg-hover, #242442);
+          border: 1px solid var(--border, #2d2d4a);
+          color: var(--text, #e2e8f0);
+          cursor: pointer; font-size: 1.2rem;
+          padding: 4px 10px; border-radius: 6px;
+          transition: all 0.2s;
+        "
+        @click=${props.onCloseDrillDown}
+        @mouseenter=${(e: any) => {
+          e.target.style.background = "var(--border, #2d2d4a)";
+        }}
+        @mouseleave=${(e: any) => {
+          e.target.style.background = "var(--bg-hover, #242442)";
+        }}
+      >✕</button>
+
+      <div style="
+        font-size: 0.75rem; font-weight: 600;
+        color: var(--text-muted, #94a3b8);
+        text-transform: uppercase; letter-spacing: 0.5px;
+        margin-bottom: 12px;
+      ">
+        Instances — ${agentName}
+      </div>
+
+      ${
+        props.drillDownInstancesLoading
+          ? html`
+              <div class="muted" style="padding: 16px 0">Loading instances...</div>
+            `
+          : props.drillDownInstancesError
+            ? html`<div class="pill danger">${props.drillDownInstancesError}</div>`
+            : props.drillDownInstances.length === 0
+              ? html`
+                  <div
+                    style="
+                      padding: 24px;
+                      text-align: center;
+                      background: var(--bg-hover, #242442);
+                      border-radius: 8px;
+                      border: 1px dashed var(--border, #2d2d4a);
+                    "
+                  >
+                    <div style="font-size: 2rem; margin-bottom: 8px">📭</div>
+                    <div class="muted" style="font-size: 0.9rem">No instances found for this agent.</div>
+                  </div>
+                `
+              : html`
+              <div style="display: grid; gap: 4px;">
+                ${props.drillDownInstances.map((inst) => {
+                  const st = drillDownInstanceStatus(inst.status);
+                  const isSelected = inst.instanceId === props.drillDownSelectedInstanceId;
+                  return html`
+                    <div
+                      style="
+                        display: grid;
+                        grid-template-columns: auto 1fr auto auto auto;
+                        align-items: center;
+                        gap: 10px;
+                        padding: 10px 14px;
+                        background: ${isSelected ? "var(--border, #2d2d4a)" : "var(--bg-hover, #242442)"};
+                        border: 1px solid ${isSelected ? "var(--border-strong, #3d3d5a)" : "transparent"};
+                        border-radius: 6px;
+                        cursor: pointer;
+                        transition: all 0.15s;
+                        font-size: 0.85rem;
+                      "
+                      @click=${() => props.onSelectInstance(inst.instanceId)}
+                      @mouseenter=${(e: any) => {
+                        if (!isSelected)
+                          e.currentTarget.style.background = "var(--border, #2d2d4a)";
+                      }}
+                      @mouseleave=${(e: any) => {
+                        if (!isSelected)
+                          e.currentTarget.style.background = "var(--bg-hover, #242442)";
+                      }}
+                    >
+                      <span style="
+                        display: inline-block; width: 8px; height: 8px;
+                        border-radius: 50%; background: ${st.color};
+                        ${inst.status === "running" ? "animation: pulse 2s infinite;" : ""}
+                        flex-shrink: 0;
+                      "></span>
+                      <div style="min-width: 0; overflow: hidden;">
+                        <div style="
+                          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                          color: var(--text, #e2e8f0);
+                        ">
+                          ${inst.assignedTask ?? "—"}
+                        </div>
+                        <code style="font-size: 0.72rem; color: var(--text-muted, #94a3b8);">
+                          ${inst.instanceId}
+                        </code>
+                      </div>
+                      <span class="pill" style="font-size: 0.7rem;">${st.label}</span>
+                      <span style="
+                        font-size: 0.78rem; font-weight: 600;
+                        color: ${inst.cost > 0 ? "#f59e0b" : "var(--text-muted, #94a3b8)"};
+                        white-space: nowrap;
+                      ">
+                        $${inst.cost.toFixed(2)}
+                      </span>
+                      <span class="muted" style="font-size: 0.72rem; white-space: nowrap;">
+                        ${inst.spawnedAt ? formatAgo(new Date(inst.spawnedAt).getTime()) : "—"}
+                      </span>
+                    </div>
+                  `;
+                })}
+              </div>
+            `
+      }
+
+      ${
+        props.drillDownSelectedInstanceId
+          ? html`
+          <div style="margin-top: 16px;">
+            <div style="
+              font-size: 0.75rem; font-weight: 600;
+              color: var(--text-muted, #94a3b8);
+              text-transform: uppercase; letter-spacing: 0.5px;
+              margin-bottom: 8px;
+            ">
+              Logs — ${props.drillDownSelectedInstanceId}
+            </div>
+            ${
+              props.drillDownLogsLoading
+                ? html`
+                    <div class="muted" style="padding: 12px 0">Loading logs...</div>
+                  `
+                : props.drillDownLogs == null
+                  ? html`
+                      <div
+                        style="
+                          padding: 16px;
+                          text-align: center;
+                          background: var(--bg-hover, #242442);
+                          border-radius: 8px;
+                          border: 1px dashed var(--border, #2d2d4a);
+                        "
+                      >
+                        <div class="muted" style="font-size: 0.9rem">No logs available.</div>
+                      </div>
+                    `
+                  : html`
+                  <pre style="
+                    margin: 0; padding: 14px;
+                    background: var(--panel, #0f0f23);
+                    border: 1px solid var(--border, #2d2d4a);
+                    border-radius: 6px;
+                    font-size: 0.78rem; line-height: 1.5;
+                    color: var(--text, #e2e8f0);
+                    max-height: 400px; overflow: auto;
+                    white-space: pre-wrap; word-break: break-all;
+                  ">${props.drillDownLogs}</pre>
+                `
+            }
+          </div>
+        `
+          : nothing
+      }
+    </div>
+  `;
+}
+
 export function renderSwarm(props: SwarmViewProps) {
   const hierarchy = props.hierarchy;
   const snapshot = props.snapshot;
@@ -800,6 +1038,10 @@ export function renderSwarm(props: SwarmViewProps) {
       [data-theme="light"] .agent-detail-panel {
         background: #ffffff;
       }
+
+      [data-theme="light"] .drill-down-panel {
+        background: #ffffff;
+      }
       
       /* Mobile responsiveness */
       @media (max-width: 768px) {
@@ -850,7 +1092,10 @@ export function renderSwarm(props: SwarmViewProps) {
 
     ${
       hierarchy?.root
-        ? html`<div style="margin-top: 16px;">${renderAgentNode(hierarchy.root, 0, props.onSelectAgent)}</div>`
+        ? html`<div style="margin-top: 16px;">${renderAgentNode(hierarchy.root, 0, (id: string) => {
+            props.onSelectAgent(id);
+            props.onOpenDrillDown(id);
+          })}</div>`
         : html`
             <div class="card" style="margin-top: 16px; text-align: center; padding: 32px 20px">
               <div style="font-size: 3rem; margin-bottom: 12px">🏗️</div>
@@ -875,9 +1120,14 @@ export function renderSwarm(props: SwarmViewProps) {
             <div class="card" style="margin-top: 16px"><div class="muted">Loading agent details...</div></div>
           `
         : props.selectedAgent
-          ? renderAgentDetail(props.selectedAgent, props.onCloseAgent)
+          ? renderAgentDetail(props.selectedAgent, () => {
+              props.onCloseAgent();
+              props.onCloseDrillDown();
+            })
           : nothing
     }
+
+    ${renderDrillDownPanel(props)}
 
     ${
       snapshot && snapshot.swarms.length > 0

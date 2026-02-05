@@ -1,36 +1,37 @@
 import type { GatewayRequestHandlers, GatewayRequestOptions } from "./server-methods/types.js";
 import { ErrorCodes, errorShape } from "./protocol/index.js";
 import { activityHandlers } from "./server-methods/activity.js";
-import { costsHandlers } from "./server-methods/costs.js";
+import { agentDrillDownHandlers } from "./server-methods/agent-drill-down.js";
 import { agentHandlers } from "./server-methods/agent.js";
 import { agentsHandlers } from "./server-methods/agents.js";
+import { auditHandlers } from "./server-methods/audit.js";
 import { browserHandlers } from "./server-methods/browser.js";
 import { channelsHandlers } from "./server-methods/channels.js";
 import { chatHandlers } from "./server-methods/chat.js";
 import { configHandlers } from "./server-methods/config.js";
 import { connectHandlers } from "./server-methods/connect.js";
+import { costsHandlers } from "./server-methods/costs.js";
 import { cronHandlers } from "./server-methods/cron.js";
 import { deviceHandlers } from "./server-methods/devices.js";
 import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
 import { healthHandlers } from "./server-methods/health.js";
 import { issuesHandlers } from "./server-methods/issues.js";
-import { notificationsHandlers } from "./server-methods/notifications.js";
-import { permissionsHandlers } from "./server-methods/permissions.js";
-import { swarmStatusHandlers } from "./server-methods/swarm-status.js";
-import { pushHandlers } from "./server-methods/push.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { metricsHandlers } from "./server-methods/metrics.js";
 import { modelsHandlers } from "./server-methods/models.js";
 import { nodeHandlers } from "./server-methods/nodes.js";
+import { notificationsHandlers } from "./server-methods/notifications.js";
+import { permissionsHandlers } from "./server-methods/permissions.js";
+import { pushHandlers } from "./server-methods/push.js";
 import { sendHandlers } from "./server-methods/send.js";
 import { sessionsHandlers } from "./server-methods/sessions.js";
 import { skillsHandlers } from "./server-methods/skills.js";
+import { sprintHandlers } from "./server-methods/sprints.js";
+import { swarmStatusHandlers } from "./server-methods/swarm-status.js";
+import { swarmHandlers } from "./server-methods/swarm.js";
 import { systemHandlers } from "./server-methods/system.js";
 import { talkHandlers } from "./server-methods/talk.js";
-import { sprintHandlers } from "./server-methods/sprints.js";
 import { taskQueueHandlers } from "./server-methods/task-queue.js";
-import { swarmHandlers } from "./server-methods/swarm.js";
-import { auditHandlers } from "./server-methods/audit.js";
 import { trustHandlers } from "./server-methods/trust.js";
 import { ttsHandlers } from "./server-methods/tts.js";
 import { updateHandlers } from "./server-methods/update.js";
@@ -74,6 +75,7 @@ const READ_METHODS = new Set([
   "models.list",
   "agents.list",
   "agent.identity.get",
+  "agent.drillDown",
   "skills.status",
   "voicewake.get",
   "sessions.list",
@@ -199,6 +201,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...usageHandlers,
   ...agentHandlers,
   ...agentsHandlers,
+  ...agentDrillDownHandlers,
   ...browserHandlers,
   ...sprintHandlers,
   ...taskQueueHandlers,

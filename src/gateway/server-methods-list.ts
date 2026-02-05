@@ -80,6 +80,7 @@ const BASE_METHODS = [
   "agent",
   "agent.identity.get",
   "agent.wait",
+  "agent.drillDown",
   "browser.request",
   // Sprints
   "sprints.list",
