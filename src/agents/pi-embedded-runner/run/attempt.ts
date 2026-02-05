@@ -618,6 +618,9 @@ export async function runEmbeddedAttempt(
       const subscription = subscribeEmbeddedPiSession({
         session: activeSession,
         runId: params.runId,
+        agentId: sessionAgentId,
+        instanceId: params.runId,
+        sessionKey: params.sessionKey,
         verboseLevel: params.verboseLevel,
         reasoningMode: params.reasoningLevel ?? "off",
         toolResultFormat: params.toolResultFormat,
