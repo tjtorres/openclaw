@@ -444,6 +444,16 @@ export function renderApp(state: AppViewState) {
                 onCloseAgent: () => {
                   state.selectedAgent = null;
                 },
+                drillDownAgentId: state.drillDownAgentId,
+                drillDownInstances: state.drillDownInstances,
+                drillDownInstancesLoading: state.drillDownInstancesLoading,
+                drillDownInstancesError: state.drillDownInstancesError,
+                drillDownSelectedInstanceId: state.drillDownSelectedInstanceId,
+                drillDownLogs: state.drillDownLogs,
+                drillDownLogsLoading: state.drillDownLogsLoading,
+                onOpenDrillDown: (id: string) => state.openDrillDown(id),
+                onCloseDrillDown: () => state.closeDrillDown(),
+                onSelectInstance: (id: string) => state.selectDrillDownInstance(id),
               })
             : nothing
         }

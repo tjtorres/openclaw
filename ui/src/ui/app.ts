@@ -272,6 +272,13 @@ export class OpenClawApp extends LitElement {
   @state() swarmSnapshot: any = null;
   @state() selectedAgent: import("./controllers/swarm.ts").AgentDetail | null = null;
   @state() selectedAgentLoading = false;
+  @state() drillDownAgentId: string | null = null;
+  @state() drillDownInstances: import("./controllers/swarm.ts").DrillDownInstance[] = [];
+  @state() drillDownInstancesLoading = false;
+  @state() drillDownInstancesError: string | null = null;
+  @state() drillDownSelectedInstanceId: string | null = null;
+  @state() drillDownLogs: string | null = null;
+  @state() drillDownLogsLoading = false;
 
   // Audit state
   @state() auditLoading = false;
@@ -552,6 +559,54 @@ export class OpenClawApp extends LitElement {
     } finally {
       this.selectedAgentLoading = false;
     }
+  }
+
+  async openDrillDown(agentId: string) {
+    if (!this.client || !this.connected) return;
+    this.drillDownAgentId = agentId;
+    this.drillDownInstances = [];
+    this.drillDownInstancesLoading = true;
+    this.drillDownInstancesError = null;
+    this.drillDownSelectedInstanceId = null;
+    this.drillDownLogs = null;
+    try {
+      const res = (await this.client.request("audit.instances", {
+        agentId,
+        limit: 50,
+      })) as { instances: import("./controllers/swarm.ts").DrillDownInstance[]; total: number };
+      this.drillDownInstances = res.instances;
+    } catch (err) {
+      this.drillDownInstancesError = String(err);
+    } finally {
+      this.drillDownInstancesLoading = false;
+    }
+  }
+
+  async selectDrillDownInstance(instanceId: string) {
+    if (!this.client || !this.connected) return;
+    this.drillDownSelectedInstanceId = instanceId;
+    this.drillDownLogs = null;
+    this.drillDownLogsLoading = true;
+    try {
+      const res = (await this.client.request("audit.logs", {
+        instanceId,
+      })) as { logs: string };
+      this.drillDownLogs = res.logs;
+    } catch (err) {
+      this.drillDownLogs = `Error loading logs: ${err}`;
+    } finally {
+      this.drillDownLogsLoading = false;
+    }
+  }
+
+  closeDrillDown() {
+    this.drillDownAgentId = null;
+    this.drillDownInstances = [];
+    this.drillDownInstancesLoading = false;
+    this.drillDownInstancesError = null;
+    this.drillDownSelectedInstanceId = null;
+    this.drillDownLogs = null;
+    this.drillDownLogsLoading = false;
   }
 
   async loadAuditData() {
